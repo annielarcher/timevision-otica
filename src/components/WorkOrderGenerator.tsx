@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { FileText, Printer, Download, User, ShieldCheck, HeartPulse, RefreshCw, Eye } from 'lucide-react';
 import { Cliente, Produto, ReceitaVisual, Venda, saveItem } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
+import { Button } from '@/components/ui/button';
 
 interface WorkOrderGeneratorProps {
   initialVenda?: Partial<Venda>;
