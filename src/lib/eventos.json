@@ -1,0 +1,29 @@
+{
+  "events": [
+    {
+      "title": "Ação Saúde Visual - Assembleia de Deus Central",
+      "date": "15 de Julho de 2026",
+      "time": "09h às 17h",
+      "location": "Templo Central — Av. Principal, 1050",
+      "description": "Atendimento gratuito de optometria refrativa para membros da congregação. Condições especiais na aquisição de óculos completos.",
+      "imageId": "action-church",
+      "imagePosition": "object-center"
+    },
+    {
+      "title": "Campanha Corporativa de Visão - TechRio Soluções",
+      "date": "22 de Julho de 2026",
+      "time": "10h às 16h",
+      "location": "Sede Corporativa Barra da Tijuca",
+      "description": "Visita programada da equipe móvel da Timevision Ótica para exames ergonômicos e refrativos para os colaboradores no local.",
+      "imageId": "action-corp",
+      "imagePosition": "object-center"
+    },
+    {
+      "title": "Ação Social de Saúde Visual - Paróquia São José",
+      "date": "08 de Agosto de 2026",
+      "time": "08h às 16h",
+      "location": "Salão Paroquial — Centro",
+      "description": "Triagem de acuidade visual e consulta gratuita com especialistas para famílias cadastradas nos projetos da paróquia."
+    }
+  ]
+}
