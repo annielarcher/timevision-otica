@@ -145,14 +145,14 @@ Se o arquivo vetorial do pattern não for fornecido pela agência, criar via CSS
 
 | # | Arquivo | Localização | Status |
 |---|---|---|---|
-| D1 | Manual de Marca completo | `TIMEVISION_MANUAL_DE_MARCA.md` | ✅ |
-| D2 | Contexto para Dev Web | `TIMEVISION_CONTEXTO_PARA_DESENVOLVIMENTO_WEB.md` | ✅ |
-| D3 | Wireframe Textual | `TIMEVISION_ESTRUTURA_E_WIREFRAME_TEXTUAL.md` | ✅ |
-| D4 | Design Tokens | `TIMEVISION_DESIGN_TOKENS.md` | ✅ |
-| D5 | Modelo de Dados | `TIMEVISION_MODELO_DE_DADOS.md` | ✅ |
-| D6 | Fluxos & Regras de Negócio | `TIMEVISION_FLUXOS_E_REGRAS_DE_NEGOCIO.md` | ✅ |
-| D7 | Conteúdo & Copy | `TIMEVISION_CONTEUDO_E_COPY.md` | ✅ |
-| D8 | Inventário de Assets | `TIMEVISION_INVENTARIO_DE_ASSETS.md` (este documento) | ✅ |
+| D1 | Manual de Marca completo | Raiz: `TIMEVISION_MANUAL_DE_MARCA.md` | ✅ |
+| D2 | Contexto para Dev Web | Raiz: `TIMEVISION_CONTEXTO_PARA_DESENVOLVIMENTO_WEB.md` | ✅ |
+| D3 | Wireframe Textual | `docs/TIMEVISION_ESTRUTURA_E_WIREFRAME_TEXTUAL.md` | ✅ |
+| D4 | Design Tokens | `docs/TIMEVISION_DESIGN_TOKENS.md` | ✅ |
+| D5 | Modelo de Dados | `docs/TIMEVISION_MODELO_DE_DADOS.md` | ✅ |
+| D6 | Fluxos & Regras de Negócio | `docs/TIMEVISION_FLUXOS_E_REGRAS_DE_NEGOCIO.md` | ✅ |
+| D7 | Conteúdo & Copy | `docs/TIMEVISION_CONTEUDO_E_COPY.md` | ✅ |
+| D8 | Inventário de Assets | `docs/TIMEVISION_INVENTARIO_DE_ASSETS.md` (este documento) | ✅ |
 
 ---
 
@@ -186,7 +186,7 @@ Se o arquivo vetorial do pattern não for fornecido pela agência, criar via CSS
 |---|---|
 | Lora (Google Fonts) | Pronto para uso |
 | Lucide React (ícones) | Já instalado no projeto |
-| Documentação de marca | 8 documentos completos na raiz do projeto |
+| Documentação de marca | 2 docs de referência na raiz + 6 docs estruturais em `docs/` |
 | Código-base Next.js | Funcional e compilando sem erros |
 
 ---
