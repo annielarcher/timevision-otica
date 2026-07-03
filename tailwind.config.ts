@@ -74,6 +74,14 @@ export default {
           border: 'hsl(var(--sidebar-border))',
           ring: 'hsl(var(--sidebar-ring))',
         },
+        brand: {
+          gold: '#B5996A',
+          graphite: '#3D3D3D',
+          'off-white': '#F9F7F8',
+          'gray-mid': '#585858',
+          wine: '#900D13',
+          petrol: '#004168',
+        },
       },
       borderRadius: {
         lg: 'var(--radius)',

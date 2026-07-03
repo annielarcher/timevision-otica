@@ -1,15 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import Image from 'next/image';
 import Link from 'next/link';
 import { Eye, ShieldCheck, HeartPulse, Sparkles, MessageCircle, Calendar, Star, ChevronDown, ChevronUp, ArrowRight, CheckCircle2 } from 'lucide-react';
 
 import { especialistas, testimonials, marcasParceiras, catalogMock } from '@/lib/institutional-data';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
+import { Hero } from '@/components/sections/hero';
 
 export default function Home() {
   const [expandedTestimonial, setExpandedTestimonial] = useState<string | null>(null);
@@ -29,43 +29,7 @@ export default function Home() {
   return (
     <div className="flex flex-col">
       {/* Hero Section */}
-      <section className="relative w-full min-h-[75vh] flex items-center text-white overflow-hidden bg-slate-950">
-        <div className="absolute inset-0 z-0">
-          <Image
-            src="https://images.unsplash.com/photo-1511556532299-8f662fc26c06?auto=format&fit=crop&q=80&w=1920"
-            alt="Óculos premium Timevision"
-            fill
-            className="object-cover opacity-20"
-            priority
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-background via-background/80 to-transparent" />
-        </div>
-        
-        <div className="container relative z-10 mx-auto px-4 py-20 flex flex-col items-center justify-center text-center max-w-4xl">
-          <span className="text-primary font-semibold tracking-wider uppercase mb-3 animate-fade-in text-sm md:text-base flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-primary" />
-            Uma Nova Visão Para Você
-          </span>
-          <h1 className="font-headline text-4xl md:text-6xl lg:text-7xl font-extrabold tracking-tight leading-none mb-6">
-            Timevision Ótica
-          </h1>
-          <p className="text-muted-foreground text-lg md:text-2xl mb-10 max-w-2xl mx-auto leading-relaxed">
-            Atendimento óptico móvel personalizado direto em sua empresa ou igreja. Consultas de vista e óculos sob medida com o máximo conforto e preços justos.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center w-full sm:w-auto">
-            <Button asChild size="lg" className="bg-primary text-primary-foreground hover:bg-primary/90 text-base py-6 px-8 rounded-full shadow-lg shadow-primary/20 transform transition-transform hover:scale-105">
-              <Link href="#vitrine">
-                Conheça Nossa Vitrine
-              </Link>
-            </Button>
-            <Button asChild variant="outline" size="lg" className="border-primary text-primary hover:bg-primary hover:text-primary-foreground text-base py-6 px-8 rounded-full">
-              <Link href="#b2b">
-                Visitas Corporativas B2B
-              </Link>
-            </Button>
-          </div>
-        </div>
-      </section>
+      <Hero />
 
       {/* Como Funciona / B2B Section */}
       <section id="b2b" className="py-16 md:py-24 bg-card border-y border-border/20">
@@ -163,9 +127,9 @@ export default function Home() {
                 <CardFooter className="p-4 pt-0">
                   <Button
                     onClick={() => handleWhatsAppContact(item.nome, item.id)}
-                    className="w-full bg-green-600 hover:bg-green-700 text-white rounded-xl shadow-md gap-2"
+                    className="w-full bg-brand-gold hover:bg-brand-gold/90 text-brand-graphite font-body font-bold rounded-xl shadow-md gap-2"
                   >
-                    <MessageCircle className="h-5 w-5 fill-white" />
+                    <MessageCircle className="h-5 w-5 fill-current" />
                     Tenho Interesse
                   </Button>
                 </CardFooter>
