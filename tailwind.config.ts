@@ -17,8 +17,10 @@ export default {
     },
     extend: {
       fontFamily: {
-        body: ['PT Sans', 'sans-serif'],
-        headline: ['Playfair Display', 'serif'],
+        body: ['var(--font-lora)', 'serif'],
+        headline: ['var(--font-lora)', 'serif'],
+        display: ['var(--font-soligant)', 'serif'],
+        tagline: ['var(--font-identification-05c)', 'sans-serif'],
         code: ['monospace'],
       },
       colors: {

@@ -6,6 +6,27 @@ import { Footer } from '@/components/layout/footer';
 import { Toaster } from '@/components/ui/toaster';
 import { Analytics } from "@vercel/analytics/next";
 import { ImageAssets } from '@/lib/placeholder-images';
+import localFont from 'next/font/local';
+import { Lora } from 'next/font/google';
+
+const lora = Lora({
+  subsets: ['latin'],
+  variable: '--font-lora',
+  weight: ['400', '500', '600', '700'],
+  display: 'swap',
+});
+
+const soligant = localFont({
+  src: '../../public/fonts/Soligant.otf',
+  variable: '--font-soligant',
+  display: 'swap',
+});
+
+const identification05C = localFont({
+  src: '../../public/fonts/Identification05C.otf',
+  variable: '--font-identification-05c',
+  display: 'swap',
+});
 
 const title = 'Timevision Ótica';
 const description = 'Atendimento óptico especializado itinerante para empresas, igrejas e pessoa física. Armações e lentes das marcas mais conceituadas sob medida.';
@@ -88,14 +109,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="pt-BR" className="dark">
+    <html lang="pt-BR" className={cn('dark', lora.variable, soligant.variable, identification05C.variable)}>
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=PT+Sans:ital,wght@0,400;0,700;1,400;1,700&display=swap"
-          rel="stylesheet"
-        />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{

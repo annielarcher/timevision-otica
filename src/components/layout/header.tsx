@@ -40,7 +40,7 @@ export function Header() {
       <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 md:backdrop-blur md:supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-20 max-w-screen-2xl items-center justify-between mx-auto px-4">
           <Link href="/" className="flex items-center space-x-2 text-primary">
-            <Eye className="h-6 w-6" />
+            <img src="/logos/icone/1.svg" className="h-8 w-8 text-primary brightness-200" alt="Timevision Ótica logo" />
             <span className="font-headline font-black text-xl tracking-tight text-foreground">
               Timevision <span className="text-primary">Ótica</span>
             </span>
@@ -90,7 +90,7 @@ export function Header() {
                 <div className="flex flex-col h-full pt-6">
                   <div className="flex items-center justify-between border-b pb-4">
                     <Link href="/" className="flex items-center space-x-2 text-primary" onClick={() => setMobileMenuOpen(false)}>
-                      <Eye className="h-5 w-5" />
+                      <img src="/logos/icone/1.svg" className="h-6 w-6 text-primary brightness-200" alt="Timevision logo" />
                       <span className="font-headline font-black text-lg text-foreground">Timevision</span>
                     </Link>
                   </div>
