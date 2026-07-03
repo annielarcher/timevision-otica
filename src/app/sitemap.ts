@@ -1,15 +1,13 @@
 import { type MetadataRoute } from 'next'
 
-const URL = 'https://bandasinfonicanacional.com.br';
+const URL = 'https://timevision.com.br';
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const staticRoutes = [
     '',
-    '/agenda',
+    '/laboratorios',
+    '/rastreamento',
     '/sobre',
-    '/idealizadores',
-    '/integrantes',
-    '/noticias',
   ];
 
   const staticUrls = staticRoutes.map((route) => ({

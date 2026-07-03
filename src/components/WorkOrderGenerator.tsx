@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { FileText, Printer, Download, User, ShieldCheck, HeartPulse, RefreshCw, Eye } from 'lucide-react';
-import { jsPDF } from 'jspdf';
 import { Cliente, Produto, ReceitaVisual, Venda, saveItem } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 
@@ -41,7 +40,7 @@ export default function WorkOrderGenerator({ initialVenda, onClose, onSaveSucces
 
   const [isExporting, setIsExporting] = useState(false);
 
-  const drawViaContent = (doc: jsPDF, yOffset: number, viaTitle: string) => {
+  const drawViaContent = (doc: any, yOffset: number, viaTitle: string) => {
     // Outer border for A6 copy
     doc.setDrawColor(200, 200, 200);
     doc.setLineWidth(0.3);
@@ -158,6 +157,7 @@ export default function WorkOrderGenerator({ initialVenda, onClose, onSaveSucces
   const handleExportPDF = async () => {
     setIsExporting(true);
     try {
+      const { jsPDF } = await import('jspdf');
       const doc = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',

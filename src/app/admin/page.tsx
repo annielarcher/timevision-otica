@@ -12,8 +12,10 @@ import {
   getItems, saveItem, deleteItem, updateItemStatus,
   Cliente, Produto, Venda, ReceitaVisual 
 } from '@/lib/firebase';
-import WorkOrderGenerator from '@/components/WorkOrderGenerator';
-import MarketingFlyer from '@/components/MarketingFlyer';
+import dynamic from 'next/dynamic';
+
+const WorkOrderGenerator = dynamic(() => import('@/components/WorkOrderGenerator'), { ssr: false });
+const MarketingFlyer = dynamic(() => import('@/components/MarketingFlyer'), { ssr: false });
 
 export default function AdminPage() {
   const { toast } = useToast();
