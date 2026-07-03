@@ -8,7 +8,7 @@ export function Footer() {
     <footer className="border-t border-border/40 py-6 md:py-8 bg-card">
       <div className="container flex flex-col md:flex-row items-center justify-between gap-4 text-center md:text-left mx-auto px-4 max-w-screen-2xl">
         <div className="flex items-center space-x-2 text-primary">
-          <Eye className="h-5 w-5" />
+          <img src="/logos/icone/1.svg" className="h-5 w-5 text-primary brightness-200" alt="Timevision logo" />
           <span className="font-headline font-bold text-sm tracking-tight text-foreground">
             Timevision Ótica
           </span>
