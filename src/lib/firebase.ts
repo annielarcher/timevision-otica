@@ -88,13 +88,14 @@ export interface Venda {
   custoTotal: number;
   lucroTotal: number;
   receita: ReceitaVisual;
-  status: 'recebido' | 'laboratorio' | 'montagem' | 'pronto' | 'entregue';
+  status: 'recebido' | 'laboratorio' | 'montagem' | 'pronto' | 'entregue' | 'orcamento';
   dataVenda: string;
+  validadeOrcamento?: string;
 }
 
 // Helper generic database actions with localStorage fallback
 export async function getItems<T>(collectionName: string): Promise<T[]> {
-  if (isFirebaseConfigured && db) {
+  if (isFirebaseConfigured && db && auth?.currentUser) {
     try {
       const querySnapshot = await getDocs(collection(db, collectionName));
       const items: any[] = [];
@@ -115,7 +116,7 @@ export async function getItems<T>(collectionName: string): Promise<T[]> {
 }
 
 export async function saveItem<T extends { id: string }>(collectionName: string, item: T): Promise<void> {
-  if (isFirebaseConfigured && db) {
+  if (isFirebaseConfigured && db && auth?.currentUser) {
     try {
       await setDoc(doc(db, collectionName, item.id), item);
       return;
@@ -137,7 +138,7 @@ export async function saveItem<T extends { id: string }>(collectionName: string,
 }
 
 export async function deleteItem(collectionName: string, id: string): Promise<void> {
-  if (isFirebaseConfigured && db) {
+  if (isFirebaseConfigured && db && auth?.currentUser) {
     try {
       await deleteDoc(doc(db, collectionName, id));
       return;
@@ -154,7 +155,7 @@ export async function deleteItem(collectionName: string, id: string): Promise<vo
 }
 
 export async function updateItemStatus(collectionName: string, id: string, status: string): Promise<void> {
-  if (isFirebaseConfigured && db) {
+  if (isFirebaseConfigured && db && auth?.currentUser) {
     try {
       await updateDoc(doc(db, collectionName, id), { status });
       return;
@@ -174,7 +175,7 @@ export async function updateItemStatus(collectionName: string, id: string, statu
 }
 
 export async function getItemById<T extends { id: string }>(collectionName: string, id: string): Promise<T | null> {
-  if (isFirebaseConfigured && db) {
+  if (isFirebaseConfigured && db && auth?.currentUser) {
     try {
       const docSnap = await getDoc(doc(db, collectionName, id));
       if (docSnap.exists()) {

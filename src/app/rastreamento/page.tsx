@@ -1,28 +1,34 @@
 'use client';
 
-import { useState } from 'react';
-import type { Metadata } from 'next';
-import { getItems, Venda } from '@/lib/firebase';
-import { Search, Eye, ShoppingBag, Clock, FileText, CheckCircle2, ChevronRight } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useToast } from '@/hooks/use-toast';
+import { useState } from "react";
+import { getItems, Venda } from "@/lib/firebase";
+import { Search, AlertCircle, Check, Clock } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+
+const GOLD = "#B5996A";
+const GRAPHITE = "#3D3D3D";
+const WINE = "#900D13";
+const PETROL = "#004168";
+const OFF_WHITE = "#F9F7F8";
+const GRAY = "#585858";
+
+const FONT_DISPLAY = "var(--font-soligant)";
+const FONT_BODY = "var(--font-lora)";
+const FONT_LABEL = "var(--font-identification-05c)";
 
 export default function RastreamentoPage() {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState("");
   const [order, setOrder] = useState<Venda | null>(null);
   const [searched, setSearched] = useState(false);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSearch = async () => {
     if (!query.trim()) {
       toast({
-        variant: 'destructive',
-        title: 'Campo Vazio',
-        description: 'Digite o CPF do titular ou o número do pedido.',
+        variant: "destructive",
+        title: "Campo Vazio",
+        description: "Digite o CPF ou número do pedido para buscar.",
       });
       return;
     }
@@ -32,209 +38,181 @@ export default function RastreamentoPage() {
     setOrder(null);
 
     try {
-      const sales = await getItems<Venda>('vendas');
-      const cleanQuery = query.trim().toUpperCase().replace(/[.-]/g, ''); // Limpa pontos/traços do CPF
+      const sales = await getItems<Venda>("vendas");
+      const cleanQuery = query.trim().toUpperCase().replace(/[.-]/g, "");
 
       const found = sales.find((s) => {
-        const cleanCpf = s.clienteCpf.replace(/[.-]/g, '');
-        return s.id.toUpperCase() === cleanQuery || cleanCpf === cleanQuery || s.id.toUpperCase() === `TV-${cleanQuery}`;
+        if (s.status === 'orcamento') return false;
+        const cleanCpf = s.clienteCpf.replace(/[.-]/g, "");
+        return (
+          s.id.toUpperCase() === cleanQuery || 
+          cleanCpf === cleanQuery || 
+          s.id.toUpperCase() === `TV-${cleanQuery}`
+        );
       });
 
       if (found) {
         setOrder(found);
       } else {
         toast({
-          variant: 'destructive',
-          title: 'Pedido Não Encontrado',
-          description: 'Não encontramos nenhuma ordem ativa com os dados fornecidos.',
+          variant: "destructive",
+          title: "Pedido não encontrado",
+          description: "Confira o número da O.S. ou o CPF digitado.",
         });
       }
     } catch (error) {
-      console.error(error);
+      console.error("Erro ao buscar pedido:", error);
       toast({
-        variant: 'destructive',
-        title: 'Erro ao Buscar',
-        description: 'Ocorreu um erro ao pesquisar seu pedido. Tente novamente.',
+        variant: "destructive",
+        title: "Erro de Conexão",
+        description: "Ocorreu um erro ao conectar ao banco de dados.",
       });
     } finally {
       setLoading(false);
     }
   };
 
-  // Helper mapping order status to step indexes
+  // Mapeamento dos passos do status
   const statusSteps = [
-    { key: 'recebido', label: 'Pedido Recebido', desc: 'Sua ordem foi registrada no sistema.' },
-    { key: 'laboratorio', label: 'No Laboratório', desc: 'Suas lentes estão sendo confeccionadas.' },
-    { key: 'montagem', label: 'Em Montagem', desc: 'As lentes estão sendo ajustadas à armação.' },
-    { key: 'pronto', label: 'Pronto para Entrega', desc: 'Seus óculos estão prontos para envio ou retirada!' },
-    { key: 'entregue', label: 'Entregue', desc: 'Pedido finalizado e entregue com sucesso!' },
+    { key: "recebido", label: "Pedido Recebido" },
+    { key: "laboratorio", label: "No Laboratório" },
+    { key: "montagem", label: "Em Montagem" },
+    { key: "pronto", label: "Pronto para Entrega" },
+    { key: "entregue", label: "Entregue" },
   ];
 
-  const getCurrentStepIndex = (status: string) => {
-    return statusSteps.findIndex((step) => step.key === status);
+  const getStepStatus = (stepKey: string) => {
+    if (!order) return false;
+    const orderIndex = statusSteps.findIndex((s) => s.key === order.status);
+    const stepIndex = statusSteps.findIndex((s) => s.key === stepKey);
+    return stepIndex <= orderIndex;
   };
 
-  const currentStepIndex = order ? getCurrentStepIndex(order.status) : 0;
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case "recebido": return "Recebido";
+      case "laboratorio": return "No Laboratório";
+      case "montagem": return "Em Montagem";
+      case "pronto": return "Pronto";
+      case "entregue": return "Entregue";
+      default: return "Em processamento";
+    }
+  };
+
+  // Separa armação e lentes dos produtos salvos
+  const armacao = order?.produtos.find(p => p.nome.toLowerCase().includes("armação") || p.nome.toLowerCase().includes("classic") || p.nome.toLowerCase().includes("elegance"))?.nome || "Curadoria Timevision";
+  const lente = order?.produtos.find(p => p.nome.toLowerCase().includes("lente") || p.nome.toLowerCase().includes("zeiss") || p.nome.toLowerCase().includes("crizal") || p.nome.toLowerCase().includes("hoya"))?.nome || "Lentes de Alta Precisão";
 
   return (
-    <div className="container py-12 md:py-20 mx-auto px-4 max-w-4xl">
-      <header className="text-center mb-12">
-        <Clock className="h-12 w-12 text-primary mx-auto mb-4" />
-        <h1 className="font-headline text-4xl md:text-5xl font-bold">Acompanhe Seu Pedido</h1>
-        <p className="text-muted-foreground mt-2 text-lg">
-          Digite o número do seu pedido (Ex: TV-1001) ou CPF para verificar o status de confecção dos seus óculos.
-        </p>
-      </header>
-
-      <Card className="bg-card border-border/60 shadow-lg mb-8 max-w-2xl mx-auto">
-        <CardContent className="pt-6">
-          <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-grow">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-              <Input
-                type="text"
-                placeholder="Ex: TV-1001 ou 000.000.000-00"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                className="pl-10 h-12 bg-background border-border/40 focus-visible:ring-primary text-base"
-              />
-            </div>
-            <Button type="submit" disabled={loading} className="h-12 bg-primary text-primary-foreground hover:bg-primary/90 px-8 text-base rounded-xl">
-              {loading ? 'Buscando...' : 'Pesquisar'}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-
-      {searched && order && (
-        <div className="space-y-8 animate-fade-in">
-          {/* Tracking Stepper */}
-          <Card className="bg-card border-border/60 shadow-md">
-            <CardHeader className="border-b border-border/20 pb-4">
-              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
-                <div>
-                  <CardTitle className="text-xl font-bold flex items-center gap-2">
-                    <ShoppingBag className="h-5 w-5 text-primary" /> Pedido #{order.id}
-                  </CardTitle>
-                  <CardDescription>Registrado em {new Date(order.dataVenda).toLocaleDateString('pt-BR')}</CardDescription>
-                </div>
-                <div className="text-right">
-                  <span className="text-xs text-muted-foreground block">Cliente</span>
-                  <span className="font-semibold text-foreground">{order.clienteNome}</span>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="pt-8">
-              {/* Vertical steps on mobile, horizontal on desktop */}
-              <div className="relative flex flex-col md:flex-row justify-between gap-6 md:gap-2">
-                {/* Horizontal line for desktop stepper */}
-                <div className="absolute top-[18px] left-6 right-6 h-[3px] bg-slate-800 hidden md:block z-0" />
-                
-                {statusSteps.map((step, idx) => {
-                  const isDone = idx <= currentStepIndex;
-                  const isActive = idx === currentStepIndex;
-                  return (
-                    <div key={step.key} className="flex md:flex-col items-start md:items-center text-left md:text-center md:flex-1 relative z-10 gap-4 md:gap-2">
-                      <div className={`h-9 w-9 rounded-full flex items-center justify-center font-bold text-sm border-2 ${
-                        isDone 
-                          ? 'bg-primary border-primary text-primary-foreground' 
-                          : 'bg-background border-slate-700 text-muted-foreground'
-                      } ${isActive ? 'ring-4 ring-primary/25' : ''}`}>
-                        {isDone ? <CheckCircle2 className="h-5 w-5" /> : idx + 1}
-                      </div>
-                      <div>
-                        <h4 className={`font-bold text-sm ${isDone ? 'text-primary' : 'text-muted-foreground'}`}>{step.label}</h4>
-                        <p className="text-[11px] text-muted-foreground max-w-[150px] leading-tight mt-0.5">{step.desc}</p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Eye Prescription and Order Items */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card className="bg-card border-border/60 shadow-md">
-              <CardHeader className="pb-3 border-b border-border/20">
-                <CardTitle className="text-base font-bold flex items-center gap-2">
-                  <Eye className="h-5 w-5 text-primary" /> Receita Visual Associada
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-4">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-slate-800 text-muted-foreground">
-                        <th className="py-2">Olho</th>
-                        <th className="py-2">Esférico</th>
-                        <th className="py-2">Cilíndrico</th>
-                        <th className="py-2">Eixo</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr className="border-b border-slate-800/50">
-                        <td className="py-2 font-bold text-primary">OD (Direito)</td>
-                        <td className="py-2">{order.receita.esfericoOD || 'Plano'}</td>
-                        <td className="py-2">{order.receita.cilindricoOD || '0.00'}</td>
-                        <td className="py-2">{order.receita.eixoOD ? `${order.receita.eixoOD}°` : '-'}</td>
-                      </tr>
-                      <tr className="border-b border-slate-800/50">
-                        <td className="py-2 font-bold text-primary">OE (Esquerdo)</td>
-                        <td className="py-2">{order.receita.esfericoOE || 'Plano'}</td>
-                        <td className="py-2">{order.receita.cilindricoOE || '0.00'}</td>
-                        <td className="py-2">{order.receita.eixoOE ? `${order.receita.eixoOE}°` : '-'}</td>
-                      </tr>
-                      {order.receita.adicao && (
-                        <tr>
-                          <td className="py-2 font-bold text-primary">Adição</td>
-                          <td colSpan={3} className="py-2 font-semibold">{order.receita.adicao}</td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-card border-border/60 shadow-md">
-              <CardHeader className="pb-3 border-b border-border/20">
-                <CardTitle className="text-base font-bold flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-primary" /> Detalhes dos Produtos
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-4">
-                <div className="space-y-4">
-                  {order.produtos.map((p) => (
-                    <div key={p.id} className="flex justify-between items-center text-sm border-b border-slate-800/40 pb-2">
-                      <div>
-                        <span className="font-semibold text-foreground">{p.nome}</span>
-                        <span className="text-xs text-muted-foreground block">Qtd: {p.quantidade}</span>
-                      </div>
-                      <span className="font-bold text-foreground">R$ {(p.precoVenda * p.quantidade).toFixed(2)}</span>
-                    </div>
-                  ))}
-                  <div className="flex justify-between items-center pt-2 font-bold text-base text-primary">
-                    <span>Valor Total do Pedido</span>
-                    <span>R$ {order.valorTotal.toFixed(2)}</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+    <div className="pt-24 min-h-screen" style={{ background: OFF_WHITE }}>
+      <div className="max-w-2xl mx-auto px-6 py-16">
+        <div className="text-center mb-12">
+          <span className="inline-block px-3 py-1 text-xs mb-4" style={{ background: PETROL, color: OFF_WHITE, fontFamily: FONT_LABEL, letterSpacing: "0.22em", textTransform: "uppercase" }}>
+            Rastreamento
+          </span>
+          <h1 className="mt-4 text-brand-graphite font-display text-4xl font-bold">Acompanhe seu Pedido</h1>
+          <p className="mt-2 text-sm text-brand-gray-mid font-body">Consulte o status de confecção dos seus óculos em tempo real</p>
         </div>
-      )}
 
-      {searched && !order && !loading && (
-        <Card className="bg-card border-border/60 shadow-md p-8 text-center max-w-md mx-auto">
-          <CardContent className="pt-6">
-            <h3 className="text-lg font-bold mb-2">Sem Resultados</h3>
-            <p className="text-sm text-muted-foreground">
-              Por favor, confira o número do pedido ou CPF e digite novamente. Caso tenha feito a compra recentemente, pode levar algumas horas para constar no sistema.
-            </p>
-          </CardContent>
-        </Card>
-      )}
+        <div className="flex gap-2 mb-3">
+          <input 
+            type="text" 
+            placeholder="CPF ou número da O.S. (ex: 1001)" 
+            value={query} 
+            onChange={e => setQuery(e.target.value)} 
+            onKeyDown={e => e.key === "Enter" && handleSearch()} 
+            className="flex-1 p-4 outline-none border" 
+            style={{ fontFamily: FONT_BODY, borderColor: "rgba(61,61,61,0.2)", background: "#fff", color: GRAPHITE }} 
+          />
+          <button 
+            onClick={handleSearch} 
+            className="px-5 flex items-center justify-center transition-opacity hover:opacity-80" 
+            style={{ background: GRAPHITE, color: OFF_WHITE, minWidth: "52px" }}
+          >
+            {loading ? (
+              <div className="w-5 h-5 border-2 rounded-full animate-spin" style={{ borderColor: `${GOLD}40`, borderTopColor: GOLD }} />
+            ) : (
+              <Search size={19} />
+            )}
+          </button>
+        </div>
+        <p className="text-[10px] text-center text-brand-gray-mid/60 mb-10 font-body italic">
+          Busque pelo CPF cadastrado na compra ou pelo número da Ordem de Serviço.
+        </p>
+
+        {searched && !order && !loading && (
+          <div className="text-center p-8 border bg-white" style={{ borderColor: "rgba(61,61,61,0.12)" }}>
+            <AlertCircle size={30} color={WINE} className="mx-auto mb-3" />
+            <p className="font-body text-brand-graphite">Nenhum pedido ativo encontrado para <strong>"{query}"</strong>.</p>
+            <p className="mt-2 text-xs text-brand-gray-mid font-body">Verifique o número da O.S. ou entre em contato com nosso atendimento.</p>
+          </div>
+        )}
+
+        {order && (
+          <div className="flex flex-col gap-4">
+            <div className="p-6 bg-white border" style={{ borderColor: "rgba(61,61,61,0.1)" }}>
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <p className="text-[10px] mb-1 font-tagline text-brand-gold tracking-widest uppercase">OS-{order.id}</p>
+                  <h2 className="font-display text-brand-graphite text-xl font-bold">{order.clienteNome}</h2>
+                </div>
+                <span className="inline-block px-3 py-1 text-xs" style={{ background: PETROL, color: OFF_WHITE, fontFamily: FONT_LABEL, letterSpacing: "0.22em", textTransform: "uppercase" }}>
+                  {getStatusLabel(order.status)}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-4 pt-4 border-t text-sm" style={{ borderColor: "rgba(61,61,61,0.1)" }}>
+                <div>
+                  <p className="text-[10px] mb-1 uppercase font-tagline text-brand-gray-mid tracking-widest">Armação</p>
+                  <p className="font-body text-brand-graphite text-xs">{armacao}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] mb-1 uppercase font-tagline text-brand-gray-mid tracking-widest">Lentes</p>
+                  <p className="font-body text-brand-graphite text-xs">{lente}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 bg-white border" style={{ borderColor: "rgba(61,61,61,0.1)" }}>
+              <p className="mb-6 text-[10px] uppercase font-tagline text-brand-gold tracking-widest">Status de Confecção</p>
+              {statusSteps.map((s, i) => {
+                const done = getStepStatus(s.key);
+                return (
+                  <div key={s.key} className="flex gap-4">
+                    <div className="flex flex-col items-center">
+                      <div 
+                        className="w-8 h-8 flex items-center justify-center flex-shrink-0" 
+                        style={{ 
+                          background: done ? GOLD : "rgba(61,61,61,0.08)", 
+                          border: `2px solid ${done ? GOLD : "rgba(61,61,61,0.18)"}` 
+                        }}
+                      >
+                        {done ? (
+                          <Check size={13} color={OFF_WHITE} />
+                        ) : (
+                          <div className="w-2 h-2 rounded-full bg-brand-gray-mid/30" />
+                        )}
+                      </div>
+                      {i < statusSteps.length - 1 && (
+                        <div 
+                          className="w-px my-1" 
+                          style={{ 
+                            background: done ? `${GOLD}40` : "rgba(61,61,61,0.1)", 
+                            minHeight: "28px", 
+                            flex: 1 
+                          }} 
+                        />
+                      )}
+                    </div>
+                    <div className="pb-5">
+                      <p className="font-body text-sm leading-8" style={{ color: done ? GRAPHITE : "rgba(61,61,61,0.35)" }}>{s.label}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -10,12 +10,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useToast } from '@/hooks/use-toast';
 import { 
   getItems, saveItem, deleteItem, updateItemStatus,
-  Cliente, Produto, Venda, ReceitaVisual 
+  Cliente, Produto, Venda, ReceitaVisual, auth
 } from '@/lib/firebase';
+import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import dynamic from 'next/dynamic';
 
 const WorkOrderGenerator = dynamic(() => import('@/components/WorkOrderGenerator'), { ssr: false });
 const MarketingFlyer = dynamic(() => import('@/components/MarketingFlyer'), { ssr: false });
+const GOLD = "#B5996A";
 
 export default function AdminPage() {
   const { toast } = useToast();
@@ -46,6 +48,7 @@ export default function AdminPage() {
   const [activeOSVenda, setActiveOSVenda] = useState<Partial<Venda> | null>(null);
 
   // PDV Order state
+  const [pdvSaleType, setPdvSaleType] = useState<'venda' | 'orcamento'>('venda');
   const [pdvClienteId, setPdvClienteId] = useState('');
   const [pdvFrameId, setPdvFrameId] = useState('');
   const [pdvLensId, setPdvLensId] = useState('');
@@ -168,10 +171,10 @@ export default function AdminPage() {
     setPdvPriceTotal(sum);
   }, [pdvFrameId, pdvLensId, produtos]);
 
-  // 3. Authenticate Handler
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Fallback static credentials
+    
+    // 1. Fallback / Test bypass static credentials (local mode/demo)
     if (loginEmail === 'admin@timevision.com' && loginPassword === 'timevision123') {
       setIsAuthenticated(true);
       if (typeof window !== 'undefined') {
@@ -179,22 +182,56 @@ export default function AdminPage() {
       }
       loadData();
       toast({
-        title: 'Bem-vindo(a)',
-        description: 'Login efetuado no modo de demonstração local (Offline).',
+        title: 'Bem-vindo(a) (Bypass de Testes)',
+        description: 'Login efetuado no modo local/offline, ignorando o Firebase Auth.',
       });
-    } else {
-      toast({
-        variant: 'destructive',
-        title: 'Erro de Autenticação',
-        description: 'E-mail ou senha incorretos.',
-      });
+      return;
     }
+
+    // 2. Se o Firebase estiver configurado e o auth inicializado, tenta autenticação Firebase
+    if (auth) {
+      try {
+        await signInWithEmailAndPassword(auth, loginEmail, loginPassword);
+        setIsAuthenticated(true);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('tv_admin_auth', 'true');
+        }
+        loadData();
+        toast({
+          title: 'Bem-vindo(a)',
+          description: 'Login efetuado com sucesso via Firebase.',
+        });
+        return;
+      } catch (error: any) {
+        console.error("Firebase auth error:", error);
+        toast({
+          variant: 'destructive',
+          title: 'Erro de Autenticação Firebase',
+          description: error.message || 'E-mail ou senha incorretos.',
+        });
+        return;
+      }
+    }
+
+    // Se as credenciais locais falharem e não houver Firebase/outro meio
+    toast({
+      variant: 'destructive',
+      title: 'Erro de Autenticação',
+      description: 'E-mail ou senha incorretos.',
+    });
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setIsAuthenticated(false);
     if (typeof window !== 'undefined') {
       localStorage.removeItem('tv_admin_auth');
+    }
+    if (auth) {
+      try {
+        await signOut(auth);
+      } catch (error) {
+        console.error("Firebase signout error:", error);
+      }
     }
   };
 
@@ -223,6 +260,7 @@ export default function AdminPage() {
     toast({ title: 'Sucesso', description: 'Cliente salvo com sucesso!' });
     setIsClientModalOpen(false);
     setEditingCliente(null);
+    setPdvClienteId(clientData.id);
     loadData();
   };
 
@@ -270,8 +308,8 @@ export default function AdminPage() {
     }
   };
 
-  // 7. POS Sale & OS Generation Trigger
-  const handlePdvSale = (e: React.FormEvent) => {
+  // 7. POS Sale & OS/Budget Generation Trigger
+  const handlePdvSale = (e: React.FormEvent, type: 'venda' | 'orcamento') => {
     e.preventDefault();
     if (!pdvClienteId) {
       toast({ variant: 'destructive', title: 'Dados Incompletos', description: 'Selecione um cliente cadastrado.' });
@@ -287,13 +325,17 @@ export default function AdminPage() {
     const saleProducts = [];
     if (frame) {
       saleProducts.push({ id: frame.id, nome: frame.nome, quantidade: 1, precoVenda: frame.precoVenda, precoCusto: frame.precoCusto });
-      // Decrement stock in LocalStorage/DB
-      saveItem('produtos', { ...frame, quantidade: Math.max(0, frame.quantidade - 1) });
+      // Decrement stock in LocalStorage/DB ONLY if it is a real sale, NOT a budget proposal!
+      if (type === 'venda') {
+        saveItem('produtos', { ...frame, quantidade: Math.max(0, frame.quantidade - 1) });
+      }
     }
     if (lens) {
       saleProducts.push({ id: lens.id, nome: lens.nome, quantidade: 1, precoVenda: lens.precoVenda, precoCusto: lens.precoCusto });
       // Decrement stock
-      saveItem('produtos', { ...lens, quantidade: Math.max(0, lens.quantidade - 1) });
+      if (type === 'venda') {
+        saveItem('produtos', { ...lens, quantidade: Math.max(0, lens.quantidade - 1) });
+      }
     }
 
     // Set O.S. generator data to trigger the modal/WorkOrder view
@@ -317,16 +359,18 @@ export default function AdminPage() {
         eixoOE: pdvEixoOE,
         adicao: pdvAdicao
       },
-      status: 'recebido',
-      dataVenda: orderDate
+      status: type === 'venda' ? 'recebido' : 'orcamento',
+      dataVenda: orderDate,
+      validadeOrcamento: type === 'orcamento' ? new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0] : undefined
     };
 
     setActiveOSVenda(pendingVenda);
   };
 
   // Financial Calculators
-  const totalRevenue = vendas.reduce((acc, curr) => acc + curr.valorTotal, 0);
-  const totalCost = vendas.reduce((acc, curr) => acc + (curr.custoTotal || curr.valorTotal * 0.5), 0);
+  const realSales = vendas.filter(v => v.status !== 'orcamento');
+  const totalRevenue = realSales.reduce((acc, curr) => acc + curr.valorTotal, 0);
+  const totalCost = realSales.reduce((acc, curr) => acc + (curr.custoTotal || curr.valorTotal * 0.5), 0);
   const totalProfit = totalRevenue - totalCost;
   const averageMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
   const lowStockCount = produtos.filter(p => p.quantidade <= 3).length;
@@ -389,6 +433,26 @@ export default function AdminPage() {
               <Button type="submit" className="w-full bg-primary text-primary-foreground hover:bg-primary/90 py-5 font-bold">
                 Entrar no Painel
               </Button>
+              {process.env.NODE_ENV === 'development' && (
+                <Button 
+                  type="button" 
+                  onClick={() => {
+                    setIsAuthenticated(true);
+                    if (typeof window !== 'undefined') {
+                      localStorage.setItem('tv_admin_auth', 'true');
+                    }
+                    loadData();
+                    toast({
+                      title: 'Modo de Testes Ativo',
+                      description: 'Entrando sem necessidade de credenciais.',
+                    });
+                  }}
+                  variant="outline" 
+                  className="w-full border-slate-800 text-slate-400 font-bold"
+                >
+                  Pular Autenticação (Modo Desenvolvedor)
+                </Button>
+              )}
             </form>
           </CardContent>
           <div className="p-4 bg-slate-950 border-t border-slate-900 text-[10px] text-center text-slate-500">
@@ -422,75 +486,58 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col md:flex-row">
+    <div className="min-h-screen bg-[#111] text-brand-off-white flex flex-col font-body">
       
-      {/* SIDEBAR NAVIGATION */}
-      <aside className="w-full md:w-64 bg-slate-900 border-b md:border-b-0 md:border-r border-slate-800 flex flex-col p-6 shrink-0 justify-between">
-        <div>
-          <div className="flex items-center gap-3 mb-8">
-            <div className="p-2 rounded-lg bg-primary/20 text-primary border border-primary/30">
-              <Package className="w-6 h-6" />
-            </div>
-            <div>
-              <h1 className="text-sm font-black tracking-tight text-white uppercase leading-none">Timevision</h1>
-              <p className="text-[10px] text-slate-400 mt-1 font-semibold">Painel Administrativo / PDV</p>
-            </div>
+      {/* HEADER BAR */}
+      <div className="px-5 py-4 flex items-center justify-between sticky top-0 z-40" style={{ background: "#161616", borderBottom: `1px solid ${GOLD}20` }}>
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 flex items-center justify-center flex-shrink-0" style={{ background: GOLD }}>
+            <span className="font-display text-brand-graphite font-bold text-sm">TV</span>
           </div>
-
-          <nav className="flex flex-row md:flex-col gap-1.5 overflow-x-auto md:overflow-visible pb-3 md:pb-0">
-            <button
-              onClick={() => setActiveTab('dash')}
-              className={`flex items-center gap-2.5 py-2.5 px-4 text-xs font-bold rounded-lg transition-all shrink-0 ${
-                activeTab === 'dash' ? 'bg-primary text-primary-foreground shadow' : 'text-slate-400 hover:text-white hover:bg-slate-800'
-              }`}
-            >
-              <TrendingUp className="h-4 w-4" /> Visão Geral
-            </button>
-            <button
-              onClick={() => setActiveTab('pdv')}
-              className={`flex items-center gap-2.5 py-2.5 px-4 text-xs font-bold rounded-lg transition-all shrink-0 ${
-                activeTab === 'pdv' ? 'bg-primary text-primary-foreground shadow' : 'text-slate-400 hover:text-white hover:bg-slate-800'
-              }`}
-            >
-              <ShoppingCart className="h-4 w-4" /> Venda Rápida (PDV)
-            </button>
-            <button
-              onClick={() => setActiveTab('clientes')}
-              className={`flex items-center gap-2.5 py-2.5 px-4 text-xs font-bold rounded-lg transition-all shrink-0 ${
-                activeTab === 'clientes' ? 'bg-primary text-primary-foreground shadow' : 'text-slate-400 hover:text-white hover:bg-slate-800'
-              }`}
-            >
-              <Users className="h-4 w-4" /> Clientes
-            </button>
-            <button
-              onClick={() => setActiveTab('estoque')}
-              className={`flex items-center gap-2.5 py-2.5 px-4 text-xs font-bold rounded-lg transition-all shrink-0 ${
-                activeTab === 'estoque' ? 'bg-primary text-primary-foreground shadow' : 'text-slate-400 hover:text-white hover:bg-slate-800'
-              }`}
-            >
-              <Package className="h-4 w-4" /> Estoque
-            </button>
-            <button
-              onClick={() => setActiveTab('mkt')}
-              className={`flex items-center gap-2.5 py-2.5 px-4 text-xs font-bold rounded-lg transition-all shrink-0 ${
-                activeTab === 'mkt' ? 'bg-primary text-primary-foreground shadow' : 'text-slate-400 hover:text-white hover:bg-slate-800'
-              }`}
-            >
-              <Sparkles className="h-4 w-4" /> Marketing
-            </button>
-          </nav>
+          <div>
+            <p className="font-tagline text-brand-off-white tracking-widest text-xs uppercase">Painel PDV & Gestão</p>
+            <p className="font-body text-brand-off-white/40 text-[10px]">Timevision Ótica — Módulo Corporativo</p>
+          </div>
         </div>
-
-        <div className="pt-4 border-t border-slate-800 mt-6 md:mt-0 flex justify-between items-center">
-          <span className="text-[10px] text-slate-500 font-semibold">Modo Offline (LocalStorage)</span>
-          <button onClick={handleLogout} className="p-2 rounded-lg bg-red-950/20 text-red-400 hover:bg-red-950/50 transition-colors">
-            <LogOut className="h-4 w-4" />
+        <div className="flex items-center gap-4">
+          <span className="text-xs hidden sm:block font-tagline text-brand-gold tracking-widest">
+            {new Date().toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "short", year: "numeric" })}
+          </span>
+          <button 
+            onClick={handleLogout} 
+            className="p-2 rounded-lg bg-red-950/20 text-red-400 hover:bg-red-950/50 transition-colors flex items-center gap-1.5 text-xs font-tagline tracking-wider"
+          >
+            <LogOut className="h-4 w-4" /> Sair
           </button>
         </div>
-      </aside>
+      </div>
 
-      {/* MAIN CONTENT AREA */}
-      <main className="flex-1 p-6 md:p-8 overflow-y-auto max-h-screen">
+      {/* HORIZONTAL TAB NAVIGATION */}
+      <div className="overflow-x-auto" style={{ background: "#1A1A1A", borderBottom: `1px solid ${GOLD}12` }}>
+        <div className="flex px-4">
+          {[
+            { id: 'dash', Icon: TrendingUp, label: "Dashboard" },
+            { id: 'pdv', Icon: ShoppingCart, label: "Nova Venda" },
+            { id: 'clientes', Icon: Users, label: "Clientes" },
+            { id: 'estoque', Icon: Package, label: "Estoque" },
+            { id: 'mkt', Icon: Sparkles, label: "Marketing" }
+          ].map(({ id, Icon, label }) => (
+            <button 
+              key={id} 
+              onClick={() => setActiveTab(id as any)} 
+              className="flex items-center gap-2 px-6 py-4 text-xs uppercase whitespace-nowrap transition-all border-b-2 font-tagline tracking-widest" 
+              style={{ 
+                color: activeTab === id ? GOLD : "rgba(249,247,248,0.38)", 
+                borderColor: activeTab === id ? GOLD : "transparent" 
+              }}
+            >
+              <Icon size={13} />{label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <main className="flex-1 p-6 md:p-8 max-w-7xl mx-auto w-full">
         
         {/* TABA 1: DASHBOARD */}
         {activeTab === 'dash' && (
@@ -572,6 +619,7 @@ export default function AdminPage() {
                               onChange={(e) => handleUpdateStatus(v.id, e.target.value)}
                               className="bg-slate-950 border border-slate-800 rounded px-2.5 py-1 text-[11px] text-white focus:outline-none"
                             >
+                              <option value="orcamento">Orçamento (7 dias)</option>
                               <option value="recebido">Pedido Recebido</option>
                               <option value="laboratorio">No Laboratório</option>
                               <option value="montagem">Em Montagem</option>
@@ -586,7 +634,7 @@ export default function AdminPage() {
                               variant="ghost" 
                               className="h-8 text-primary hover:text-primary gap-1"
                             >
-                              <Eye className="h-3.5 w-3.5" /> Re-gerar O.S.
+                              <Eye className="h-3.5 w-3.5" /> {v.status === 'orcamento' ? 'Re-gerar Orçamento' : 'Re-gerar O.S.'}
                             </Button>
                           </td>
                         </tr>
@@ -599,17 +647,29 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* TABA 2: PDV (Venda Rápida) */}
+        {/* TAB 2: NOVA VENDA */}
         {activeTab === 'pdv' && (
           <div className="space-y-6">
-            <h2 className="text-2xl font-headline font-bold">Venda Rápida & Cadastro de Receita</h2>
+            <h2 className="text-2xl font-headline font-bold">Nova Venda & Cadastro de Receita</h2>
             <Card className="bg-slate-900 border-slate-800 shadow">
               <CardContent className="pt-6">
-                <form onSubmit={handlePdvSale} className="space-y-6">
+                <form onSubmit={(e) => handlePdvSale(e, pdvSaleType)} className="space-y-6">
                   {/* Select Customer */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Cliente da Compra</label>
+                      <div className="flex justify-between items-center">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Cliente da Compra</label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingCliente(null);
+                            setIsClientModalOpen(true);
+                          }}
+                          className="text-[10px] font-bold text-primary hover:underline flex items-center gap-1"
+                        >
+                          <Plus className="h-3 w-3" /> Cadastrar Novo
+                        </button>
+                      </div>
                       <select
                         value={pdvClienteId}
                         onChange={(e) => setPdvClienteId(e.target.value)}
@@ -735,12 +795,23 @@ export default function AdminPage() {
                       <span className="text-3xl font-black text-primary">R$ {pdvPriceTotal.toFixed(2)}</span>
                     </div>
                     
-                    <Button 
-                      type="submit" 
-                      className="bg-primary text-primary-foreground hover:bg-primary/90 font-bold px-10 py-6 text-base rounded-xl"
-                    >
-                      Registrar Venda & Abrir O.S.
-                    </Button>
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <Button 
+                        type="submit" 
+                        onClick={() => setPdvSaleType('orcamento')}
+                        variant="outline"
+                        className="border-slate-800 text-slate-350 hover:bg-slate-850 hover:text-white font-bold px-6 py-6 text-xs uppercase tracking-wider rounded-xl"
+                      >
+                        Gerar Orçamento (7 dias)
+                      </Button>
+                      <Button 
+                        type="submit" 
+                        onClick={() => setPdvSaleType('venda')}
+                        className="bg-primary text-primary-foreground hover:bg-primary/90 font-bold px-8 py-6 text-xs uppercase tracking-wider rounded-xl"
+                      >
+                        Registrar Venda & Abrir O.S.
+                      </Button>
+                    </div>
                   </div>
                 </form>
               </CardContent>
@@ -833,87 +904,6 @@ export default function AdminPage() {
               })}
             </div>
 
-            {/* Client Modal */}
-            {isClientModalOpen && (
-              <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                <Card className="w-full max-w-lg bg-slate-900 border-slate-800 shadow-2xl">
-                  <CardHeader>
-                    <CardTitle className="text-xl font-bold">{editingCliente ? 'Editar Cliente' : 'Cadastrar Novo Cliente'}</CardTitle>
-                    <CardDescription>Preencha os dados cadastrais do titular da compra.</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <form onSubmit={handleSaveCliente} className="space-y-4">
-                      <div className="flex flex-col gap-1">
-                        <label className="text-[10px] font-bold uppercase text-slate-400">Nome Completo</label>
-                        <input
-                          type="text"
-                          name="nome"
-                          defaultValue={editingCliente?.nome || ''}
-                          className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-white"
-                          required
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="flex flex-col gap-1">
-                          <label className="text-[10px] font-bold uppercase text-slate-400">CPF</label>
-                          <input
-                            type="text"
-                            name="cpf"
-                            defaultValue={editingCliente?.cpf || ''}
-                            placeholder="000.000.000-00"
-                            className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-white"
-                            required
-                          />
-                        </div>
-                        <div className="flex flex-col gap-1">
-                          <label className="text-[10px] font-bold uppercase text-slate-400">Telefone</label>
-                          <input
-                            type="text"
-                            name="telefone"
-                            defaultValue={editingCliente?.telefone || ''}
-                            className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-white"
-                            required
-                          />
-                        </div>
-                      </div>
-                      <div className="flex flex-col gap-1">
-                        <label className="text-[10px] font-bold uppercase text-slate-400">E-mail</label>
-                        <input
-                          type="email"
-                          name="email"
-                          defaultValue={editingCliente?.email || ''}
-                          className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-white"
-                        />
-                      </div>
-                      <div className="flex flex-col gap-1">
-                        <label className="text-[10px] font-bold uppercase text-slate-400">Endereço Completo</label>
-                        <input
-                          type="text"
-                          name="endereco"
-                          defaultValue={editingCliente?.endereco || ''}
-                          className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-white"
-                        />
-                      </div>
-
-                      <div className="flex gap-3 pt-4 border-t border-slate-800">
-                        <Button type="submit" className="flex-1 bg-primary text-primary-foreground font-bold">Salvar Cliente</Button>
-                        <Button 
-                          type="button" 
-                          variant="outline" 
-                          onClick={() => {
-                            setIsClientModalOpen(false);
-                            setEditingCliente(null);
-                          }}
-                          className="border-slate-800 text-slate-400"
-                        >
-                          Cancelar
-                        </Button>
-                      </div>
-                    </form>
-                  </CardContent>
-                </Card>
-              </div>
-            )}
           </div>
         )}
 
@@ -1102,6 +1092,88 @@ export default function AdminPage() {
           <div className="space-y-6">
             <h2 className="text-2xl font-headline font-bold">Gerador de Material de Marketing</h2>
             <MarketingFlyer />
+          </div>
+        )}
+
+        {/* Client Modal (Globally Accessible) */}
+        {isClientModalOpen && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <Card className="w-full max-w-lg bg-slate-900 border-slate-800 shadow-2xl">
+              <CardHeader>
+                <CardTitle className="text-xl font-bold">{editingCliente ? 'Editar Cliente' : 'Cadastrar Novo Cliente'}</CardTitle>
+                <CardDescription>Preencha os dados cadastrais do titular da compra.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleSaveCliente} className="space-y-4">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-bold uppercase text-slate-400">Nome Completo</label>
+                    <input
+                      type="text"
+                      name="nome"
+                      defaultValue={editingCliente?.nome || ''}
+                      className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-white"
+                      required
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-bold uppercase text-slate-400">CPF</label>
+                      <input
+                        type="text"
+                        name="cpf"
+                        defaultValue={editingCliente?.cpf || ''}
+                        placeholder="000.000.000-00"
+                        className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-white"
+                        required
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-bold uppercase text-slate-400">Telefone</label>
+                      <input
+                        type="text"
+                        name="telefone"
+                        defaultValue={editingCliente?.telefone || ''}
+                        className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-white"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-bold uppercase text-slate-400">E-mail</label>
+                    <input
+                      type="email"
+                      name="email"
+                      defaultValue={editingCliente?.email || ''}
+                      className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-white"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-bold uppercase text-slate-400">Endereço Completo</label>
+                    <input
+                      type="text"
+                      name="endereco"
+                      defaultValue={editingCliente?.endereco || ''}
+                      className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-white"
+                    />
+                  </div>
+
+                  <div className="flex gap-3 pt-4 border-t border-slate-800">
+                    <Button type="submit" className="flex-1 bg-primary text-primary-foreground font-bold">Salvar Cliente</Button>
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      onClick={() => {
+                        setIsClientModalOpen(false);
+                        setEditingCliente(null);
+                      }}
+                      className="border-slate-800 text-slate-400"
+                    >
+                      Cancelar
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
           </div>
         )}
 

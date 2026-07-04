@@ -51,10 +51,12 @@ export default function WorkOrderGenerator({ initialVenda, onClose, onSaveSucces
     doc.setFillColor(15, 23, 42); // Primary Navy color
     doc.rect(8, yOffset, 194, 8, 'F');
     
+    const isOrcamento = initialVenda?.status === 'orcamento';
+    const docTitle = isOrcamento ? 'PROPOSTA DE ORÇAMENTO' : 'ORDEM DE SERVIÇO';
     doc.setTextColor(255, 255, 255);
     doc.setFont('Helvetica', 'bold');
-    doc.setFontSize(9);
-    doc.text(`TIMEVISION ÓTICA  |  ORDEM DE SERVIÇO  -  ${viaTitle.toUpperCase()}`, 12, yOffset + 5.5);
+    doc.setFontSize(8.5);
+    doc.text(`TIMEVISION ÓTICA  |  ${docTitle}  -  ${viaTitle.toUpperCase()}`, 12, yOffset + 5.5);
 
     // Order info top right
     doc.setFontSize(8);
@@ -68,7 +70,12 @@ export default function WorkOrderGenerator({ initialVenda, onClose, onSaveSucces
     doc.setFont('Helvetica', 'normal');
     doc.setFontSize(7.5);
     doc.text('Contato: oticastimevision@gmail.com  |  Tel: (21) 99999-9999', 12, yOffset + 19);
-    doc.text(`Data do Pedido: ${new Date(orderDate).toLocaleDateString('pt-BR')}  |  Garantia: ${warrantyMonths} meses`, 12, yOffset + 22.5);
+    if (isOrcamento) {
+      const validDate = new Date(new Date(orderDate).getTime() + 7 * 86400000).toLocaleDateString('pt-BR');
+      doc.text(`Data da Proposta: ${new Date(orderDate).toLocaleDateString('pt-BR')}  |  Validade: 7 dias (Até ${validDate})`, 12, yOffset + 22.5);
+    } else {
+      doc.text(`Data do Pedido: ${new Date(orderDate).toLocaleDateString('pt-BR')}  |  Garantia: ${warrantyMonths} meses`, 12, yOffset + 22.5);
+    }
 
     // Client Info Box
     doc.setDrawColor(230, 230, 230);
@@ -183,11 +190,12 @@ export default function WorkOrderGenerator({ initialVenda, onClose, onSaveSucces
       // Via 2 (Cliente): y = 155 to 285
       drawViaContent(doc, 155, 'Via do Cliente (2ª Via)');
 
-      doc.save(`OS-${orderNumber}-${clientName.toLowerCase().replace(/\s+/g, '-')}.pdf`);
+      const docFilename = isOrcamento ? `ORCAMENTO-${orderNumber}` : `OS-${orderNumber}`;
+      doc.save(`${docFilename}-${clientName.toLowerCase().replace(/\s+/g, '-')}.pdf`);
 
       toast({
         title: 'Sucesso',
-        description: 'Ordem de Serviço PDF gerada e baixada com sucesso!',
+        description: isOrcamento ? 'Orçamento PDF gerado e baixado com sucesso!' : 'Ordem de Serviço PDF gerada e baixada com sucesso!',
       });
       
       // Save order to LocalStorage/Firebase
@@ -201,7 +209,7 @@ export default function WorkOrderGenerator({ initialVenda, onClose, onSaveSucces
         clienteTelefone: clientPhone,
         produtos: [
           { id: 'arm-id', nome: frameModel, quantidade: 1, precoVenda: priceTotal * 0.4, precoCusto: priceTotal * 0.2 },
-          { id: 'lens-id', nome: lensType, quantidade: 1, precoVenda: priceTotal * 0.6, precoCusto: priceTotal * 0.3 }
+          { id: 'lens-id', nome: lensType, quantity: 1, precoVenda: priceTotal * 0.6, precoCusto: priceTotal * 0.3 } as any
         ],
         valorTotal: priceTotal,
         custoTotal: priceTotal * 0.5,
@@ -216,7 +224,8 @@ export default function WorkOrderGenerator({ initialVenda, onClose, onSaveSucces
           adicao
         },
         status: initialVenda?.status || 'recebido',
-        dataVenda: orderDate
+        dataVenda: orderDate,
+        validadeOrcamento: isOrcamento ? new Date(new Date(orderDate).getTime() + 7 * 86400000).toISOString().split('T')[0] : undefined
       };
 
       await saveItem('vendas', newVenda);
@@ -234,13 +243,15 @@ export default function WorkOrderGenerator({ initialVenda, onClose, onSaveSucces
     }
   };
 
+  const isOrcamento = initialVenda?.status === 'orcamento';
+
   return (
     <div className="flex flex-col lg:flex-row gap-6 p-4 max-w-6xl mx-auto bg-slate-900 text-slate-100 rounded-2xl border border-slate-800 shadow-xl">
       {/* 1. INPUT FORM */}
       <div className="flex-1 space-y-4 max-h-[80vh] overflow-y-auto pr-2">
         <div className="flex justify-between items-center pb-2 border-b border-slate-800">
           <h2 className="text-xl font-bold flex items-center gap-2">
-            <FileText className="text-primary h-5.5 w-5.5" /> Gerar Ordem de Serviço (O.S.)
+            <FileText className="text-primary h-5.5 w-5.5" /> {isOrcamento ? 'Gerar Proposta de Orçamento' : 'Gerar Ordem de Serviço (O.S.)'}
           </h2>
           <span className="text-xs text-muted-foreground bg-slate-800 px-3 py-1 rounded-full font-bold">2 Vias A6 (A4)</span>
         </div>
@@ -445,7 +456,7 @@ export default function WorkOrderGenerator({ initialVenda, onClose, onSaveSucces
             className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 text-sm font-bold gap-2 py-5"
           >
             <Download className="h-4.5 w-4.5" />
-            {isExporting ? 'Processando PDF...' : 'Gerar e Salvar O.S.'}
+            {isExporting ? 'Processando PDF...' : (isOrcamento ? 'Gerar e Salvar Orçamento' : 'Gerar e Salvar O.S.')}
           </Button>
           {onClose && (
             <Button
@@ -467,8 +478,8 @@ export default function WorkOrderGenerator({ initialVenda, onClose, onSaveSucces
           {/* Via 1 */}
           <div className="border border-slate-300 p-1 bg-slate-50 flex-1 flex flex-col justify-between mb-1">
             <div className="flex justify-between items-center border-b border-slate-200 pb-0.5">
-              <span className="font-bold text-slate-800 text-[6px]">TIMEVISION ÓTICA - VIA LOJA</span>
-              <span className="text-[5px]">OS: {orderNumber}</span>
+              <span className="font-bold text-slate-800 text-[6px]">{isOrcamento ? 'TIMEVISION ÓTICA - ORÇAMENTO' : 'TIMEVISION ÓTICA - VIA LOJA'}</span>
+              <span className="text-[5px]">{isOrcamento ? 'Pedido:' : 'OS:'} {orderNumber}</span>
             </div>
             <div className="mt-1">
               <span className="font-bold block text-[5.5px]">Cliente: {clientName}</span>
@@ -500,8 +511,8 @@ export default function WorkOrderGenerator({ initialVenda, onClose, onSaveSucces
           {/* Via 2 */}
           <div className="border border-slate-300 p-1 bg-slate-50 flex-1 flex flex-col justify-between">
             <div className="flex justify-between items-center border-b border-slate-200 pb-0.5">
-              <span className="font-bold text-slate-800 text-[6px]">TIMEVISION ÓTICA - VIA CLIENTE</span>
-              <span className="text-[5px]">OS: {orderNumber}</span>
+              <span className="font-bold text-slate-800 text-[6px]">{isOrcamento ? 'TIMEVISION ÓTICA - ORÇAMENTO' : 'TIMEVISION ÓTICA - VIA CLIENTE'}</span>
+              <span className="text-[5px]">{isOrcamento ? 'Pedido:' : 'OS:'} {orderNumber}</span>
             </div>
             <div className="mt-1">
               <span className="font-bold block text-[5.5px]">Cliente: {clientName}</span>
