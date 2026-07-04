@@ -1,181 +1,111 @@
 'use client';
 
-import Link from 'next/link';
-import { Home, Menu, Facebook, Instagram, Mail, Youtube, Eye } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from '@/components/ui/sheet';
-import { useState } from 'react';
-import { usePathname } from 'next/navigation';
-import { cn } from '@/lib/utils';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Separator } from "@/components/ui/separator";
-import { ContactForm } from '@/components/contact-form';
+import { useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Menu, X } from "lucide-react";
 
-const navLinks = [
-  { href: '/sobre', label: 'Sobre Nós' },
-  { href: '/laboratorios', label: 'Laboratórios' },
-  { href: '/rastreamento', label: 'Rastrear Pedido' },
-];
+const GOLD = "#B5996A";
+const GRAPHITE = "#242424"; // Graphite background matching layout.tsx
+const OFF_WHITE = "#F9F7F8";
 
 export function Header() {
-  const [isMobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [isContactOpen, setContactOpen] = useState(false);
+  const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
+  const links = [
+    { label: "A Boutique", href: "/sobre" },
+    { label: "Coleções", href: "/colecoes" },
+    { label: "Lentes & Tecnologia", href: "/lentes" },
+    { label: "Rastreamento", href: "/rastreamento" },
+  ];
+
+  // Se for a página do painel administrativo, podemos esconder ou manter o header simplificado
+  const isAdmin = pathname.startsWith("/admin");
+
+  if (isAdmin) return null;
+
   return (
-    <>
-      <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 md:backdrop-blur md:supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-20 max-w-screen-2xl items-center justify-between mx-auto px-4">
-          <Link href="/" className="flex items-center space-x-2 text-primary">
-            <img src="/logos/icone/1.svg" className="h-8 w-8 text-primary brightness-200" alt="Timevision Ótica logo" />
-            <span className="font-headline font-black text-xl tracking-tight text-foreground">
-              Timevision <span className="text-primary">Ótica</span>
-            </span>
-          </Link>
-          
-          <nav className="hidden md:flex items-center space-x-6">
-            {navLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className={cn(
-                  "text-sm font-medium transition-colors hover:text-primary",
-                  pathname === link.href ? "text-primary" : "text-muted-foreground"
-                )}
+    <header className="fixed top-0 left-0 right-0 z-50 transition-all duration-300" style={{ background: GRAPHITE, borderBottom: `1px solid ${GOLD}35` }}>
+      <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+        <Link href="/" className="flex items-center space-x-3 transition-opacity hover:opacity-80">
+          <img src="/logos/icone/1.svg" className="h-8 w-8 brightness-200" alt="Logo Timevision" />
+          <img src="/logos/logo-light.svg" className="h-10 w-auto" alt="Timevision Ótica" />
+        </Link>
+
+        <nav className="hidden md:flex items-center gap-8">
+          {links.map((l) => {
+            const active = pathname === l.href;
+            return (
+              <Link 
+                key={l.href} 
+                href={l.href} 
+                className="text-xs transition-all duration-200 uppercase font-tagline tracking-widest py-1"
+                style={{ 
+                  color: active ? GOLD : "rgba(249,247,248,0.72)", 
+                  borderBottom: `1.5px solid ${active ? GOLD : "transparent"}`
+                }}
               >
-                {link.label}
+                {l.label}
               </Link>
-            ))}
-          </nav>
+            );
+          })}
+        </nav>
 
-          <div className="hidden md:flex items-center space-x-3">
-            <Button asChild variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
-              <Link href="/admin">Painel PDV</Link>
-            </Button>
-            <Button onClick={() => setContactOpen(true)} className="bg-primary text-primary-foreground hover:bg-primary/90">
-              Fale Conosco
-            </Button>
-          </div>
+        <div className="hidden md:flex items-center gap-5">
+          <Link 
+            href="/orcamento" 
+            className="inline-flex items-center justify-center px-6 py-2.5 text-xs font-tagline tracking-widest uppercase transition-all duration-200 text-brand-graphite bg-brand-gold hover:opacity-75"
+          >
+            Orçamento VIP
+          </Link>
+          <Link 
+            href="/admin" 
+            className="text-[9px] font-tagline tracking-widest transition-opacity opacity-30 hover:opacity-60 text-brand-off-white"
+          >
+            ADM
+          </Link>
+        </div>
 
-          {/* Mobile Navigation */}
-          <div className="md:hidden flex items-center space-x-2">
-            <Button asChild variant="ghost" size="sm" className="text-xs px-2">
-              <Link href="/admin">PDV</Link>
-            </Button>
-            <Sheet open={isMobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-              <SheetTrigger asChild>
-                <Button variant="ghost" size="icon">
-                  <Menu className="h-6 w-6" />
-                  <span className="sr-only">Abrir menu</span>
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="right" className="w-[280px] bg-card border-l border-border/20">
-                <SheetHeader className="sr-only">
-                  <SheetTitle>Menu</SheetTitle>
-                  <SheetDescription>Navegação principal do site.</SheetDescription>
-                </SheetHeader>
-                <div className="flex flex-col h-full pt-6">
-                  <div className="flex items-center justify-between border-b pb-4">
-                    <Link href="/" className="flex items-center space-x-2 text-primary" onClick={() => setMobileMenuOpen(false)}>
-                      <img src="/logos/icone/1.svg" className="h-6 w-6 text-primary brightness-200" alt="Timevision logo" />
-                      <span className="font-headline font-black text-lg text-foreground">Timevision</span>
-                    </Link>
-                  </div>
-                  <nav className="flex flex-col space-y-4 mt-6">
-                    <Link
-                      href="/"
-                      onClick={() => setMobileMenuOpen(false)}
-                      className={cn(
-                        "text-lg font-medium transition-colors hover:text-primary",
-                        pathname === '/' ? "text-primary" : "text-foreground"
-                      )}
-                    >
-                      Início
-                    </Link>
-                    {navLinks.map((link) => (
-                      <Link
-                        key={link.href}
-                        href={link.href}
-                        onClick={() => setMobileMenuOpen(false)}
-                        className={cn(
-                          "text-lg font-medium transition-colors hover:text-primary",
-                          pathname === link.href ? "text-primary" : "text-foreground"
-                        )}
-                      >
-                        {link.label}
-                      </Link>
-                    ))}
-                    <Link
-                      href="/admin"
-                      onClick={() => setMobileMenuOpen(false)}
-                      className={cn(
-                        "text-lg font-medium transition-colors hover:text-primary",
-                        pathname === '/admin' ? "text-primary" : "text-foreground"
-                      )}
-                    >
-                      Painel PDV
-                    </Link>
-                  </nav>
-                  <div className="mt-auto pt-6">
-                    <Button onClick={() => {
-                      setMobileMenuOpen(false);
-                      setContactOpen(true);
-                    }} className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
-                      Fale Conosco
-                    </Button>
-                  </div>
-                </div>
-              </SheetContent>
-            </Sheet>
+        <button className="md:hidden text-brand-off-white" onClick={() => setOpen(!open)}>
+          {open ? <X size={24} /> : <Menu size={24} />}
+        </button>
+      </div>
+
+      {open && (
+        <div className="md:hidden px-6 pb-6 flex flex-col gap-4 transition-all duration-300" style={{ background: GRAPHITE, borderTop: `1px solid ${GOLD}20` }}>
+          {links.map((l) => {
+            const active = pathname === l.href;
+            return (
+              <Link 
+                key={l.href} 
+                href={l.href} 
+                onClick={() => setOpen(false)}
+                className="text-left py-2 font-body text-sm font-medium"
+                style={{ color: active ? GOLD : OFF_WHITE }}
+              >
+                {l.label}
+              </Link>
+            );
+          })}
+          <div className="flex flex-col gap-3 pt-2">
+            <Link 
+              href="/orcamento" 
+              onClick={() => setOpen(false)}
+              className="w-full text-center py-3 text-xs font-tagline tracking-widest uppercase text-brand-graphite bg-brand-gold"
+            >
+              Orçamento VIP
+            </Link>
+            <Link 
+              href="/admin" 
+              onClick={() => setOpen(false)}
+              className="text-center py-1.5 text-[10px] font-tagline tracking-widest uppercase text-brand-off-white/40"
+            >
+              Painel ADM
+            </Link>
           </div>
         </div>
-      </header>
-      
-      <Dialog open={isContactOpen} onOpenChange={setContactOpen}>
-        <DialogContent className="sm:max-w-[480px] bg-card border border-border/25">
-          <DialogHeader>
-            <DialogTitle className="text-2xl font-headline">Fale Conosco</DialogTitle>
-            <DialogDescription>
-              Ficou interessado em agendar uma visita ou tem alguma dúvida? Envie uma mensagem.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-6 pt-2">
-            <ContactForm onSuccess={() => setContactOpen(false)} />
-            <div className="relative">
-              <Separator />
-              <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-card px-2">
-                <span className="text-xs text-muted-foreground">OU</span>
-              </div>
-            </div>
-            <div className="flex flex-col items-center gap-3">
-              <p className="text-xs text-muted-foreground text-center">Fale conosco pelo e-mail ou redes sociais:</p>
-              <div className="flex justify-center gap-6">
-                <Link href="https://instagram.com" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary transition-colors">
-                  <Instagram className="h-6 w-6" />
-                  <span className="sr-only">Instagram</span>
-                </Link>
-                <Link href="mailto:oticastimevision@gmail.com" className="text-muted-foreground hover:text-primary transition-colors">
-                  <Mail className="h-6 w-6" />
-                  <span className="sr-only">Email</span>
-                </Link>
-              </div>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </>
+      )}
+    </header>
   );
 }

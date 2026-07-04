@@ -10,8 +10,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useToast } from '@/hooks/use-toast';
 import { 
   getItems, saveItem, deleteItem, updateItemStatus,
-  Cliente, Produto, Venda, ReceitaVisual 
+  Cliente, Produto, Venda, ReceitaVisual, auth
 } from '@/lib/firebase';
+import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import dynamic from 'next/dynamic';
 
 const WorkOrderGenerator = dynamic(() => import('@/components/WorkOrderGenerator'), { ssr: false });
@@ -168,10 +169,35 @@ export default function AdminPage() {
     setPdvPriceTotal(sum);
   }, [pdvFrameId, pdvLensId, produtos]);
 
-  // 3. Authenticate Handler
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Fallback static credentials
+    
+    // Se o Firebase estiver configurado e o auth inicializado
+    if (auth) {
+      try {
+        await signInWithEmailAndPassword(auth, loginEmail, loginPassword);
+        setIsAuthenticated(true);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('tv_admin_auth', 'true');
+        }
+        loadData();
+        toast({
+          title: 'Bem-vindo(a)',
+          description: 'Login efetuado com sucesso via Firebase.',
+        });
+        return;
+      } catch (error: any) {
+        console.error("Firebase auth error:", error);
+        toast({
+          variant: 'destructive',
+          title: 'Erro de Autenticação Firebase',
+          description: error.message || 'E-mail ou senha incorretos.',
+        });
+        return;
+      }
+    }
+
+    // Fallback static credentials (modo offline/demo)
     if (loginEmail === 'admin@timevision.com' && loginPassword === 'timevision123') {
       setIsAuthenticated(true);
       if (typeof window !== 'undefined') {
@@ -191,10 +217,17 @@ export default function AdminPage() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setIsAuthenticated(false);
     if (typeof window !== 'undefined') {
       localStorage.removeItem('tv_admin_auth');
+    }
+    if (auth) {
+      try {
+        await signOut(auth);
+      } catch (error) {
+        console.error("Firebase signout error:", error);
+      }
     }
   };
 
@@ -422,75 +455,58 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col md:flex-row">
+    <div className="min-h-screen bg-[#111] text-brand-off-white flex flex-col font-body">
       
-      {/* SIDEBAR NAVIGATION */}
-      <aside className="w-full md:w-64 bg-slate-900 border-b md:border-b-0 md:border-r border-slate-800 flex flex-col p-6 shrink-0 justify-between">
-        <div>
-          <div className="flex items-center gap-3 mb-8">
-            <div className="p-2 rounded-lg bg-primary/20 text-primary border border-primary/30">
-              <Package className="w-6 h-6" />
-            </div>
-            <div>
-              <h1 className="text-sm font-black tracking-tight text-white uppercase leading-none">Timevision</h1>
-              <p className="text-[10px] text-slate-400 mt-1 font-semibold">Painel Administrativo / PDV</p>
-            </div>
+      {/* HEADER BAR */}
+      <div className="px-5 py-4 flex items-center justify-between sticky top-0 z-40" style={{ background: "#161616", borderBottom: `1px solid ${GOLD}20` }}>
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 flex items-center justify-center flex-shrink-0" style={{ background: GOLD }}>
+            <span className="font-display text-brand-graphite font-bold text-sm">TV</span>
           </div>
-
-          <nav className="flex flex-row md:flex-col gap-1.5 overflow-x-auto md:overflow-visible pb-3 md:pb-0">
-            <button
-              onClick={() => setActiveTab('dash')}
-              className={`flex items-center gap-2.5 py-2.5 px-4 text-xs font-bold rounded-lg transition-all shrink-0 ${
-                activeTab === 'dash' ? 'bg-primary text-primary-foreground shadow' : 'text-slate-400 hover:text-white hover:bg-slate-800'
-              }`}
-            >
-              <TrendingUp className="h-4 w-4" /> Visão Geral
-            </button>
-            <button
-              onClick={() => setActiveTab('pdv')}
-              className={`flex items-center gap-2.5 py-2.5 px-4 text-xs font-bold rounded-lg transition-all shrink-0 ${
-                activeTab === 'pdv' ? 'bg-primary text-primary-foreground shadow' : 'text-slate-400 hover:text-white hover:bg-slate-800'
-              }`}
-            >
-              <ShoppingCart className="h-4 w-4" /> Venda Rápida (PDV)
-            </button>
-            <button
-              onClick={() => setActiveTab('clientes')}
-              className={`flex items-center gap-2.5 py-2.5 px-4 text-xs font-bold rounded-lg transition-all shrink-0 ${
-                activeTab === 'clientes' ? 'bg-primary text-primary-foreground shadow' : 'text-slate-400 hover:text-white hover:bg-slate-800'
-              }`}
-            >
-              <Users className="h-4 w-4" /> Clientes
-            </button>
-            <button
-              onClick={() => setActiveTab('estoque')}
-              className={`flex items-center gap-2.5 py-2.5 px-4 text-xs font-bold rounded-lg transition-all shrink-0 ${
-                activeTab === 'estoque' ? 'bg-primary text-primary-foreground shadow' : 'text-slate-400 hover:text-white hover:bg-slate-800'
-              }`}
-            >
-              <Package className="h-4 w-4" /> Estoque
-            </button>
-            <button
-              onClick={() => setActiveTab('mkt')}
-              className={`flex items-center gap-2.5 py-2.5 px-4 text-xs font-bold rounded-lg transition-all shrink-0 ${
-                activeTab === 'mkt' ? 'bg-primary text-primary-foreground shadow' : 'text-slate-400 hover:text-white hover:bg-slate-800'
-              }`}
-            >
-              <Sparkles className="h-4 w-4" /> Marketing
-            </button>
-          </nav>
+          <div>
+            <p className="font-tagline text-brand-off-white tracking-widest text-xs uppercase">Painel PDV & Gestão</p>
+            <p className="font-body text-brand-off-white/40 text-[10px]">Timevision Ótica — Módulo Corporativo</p>
+          </div>
         </div>
-
-        <div className="pt-4 border-t border-slate-800 mt-6 md:mt-0 flex justify-between items-center">
-          <span className="text-[10px] text-slate-500 font-semibold">Modo Offline (LocalStorage)</span>
-          <button onClick={handleLogout} className="p-2 rounded-lg bg-red-950/20 text-red-400 hover:bg-red-950/50 transition-colors">
-            <LogOut className="h-4 w-4" />
+        <div className="flex items-center gap-4">
+          <span className="text-xs hidden sm:block font-tagline text-brand-gold tracking-widest">
+            {new Date().toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "short", year: "numeric" })}
+          </span>
+          <button 
+            onClick={handleLogout} 
+            className="p-2 rounded-lg bg-red-950/20 text-red-400 hover:bg-red-950/50 transition-colors flex items-center gap-1.5 text-xs font-tagline tracking-wider"
+          >
+            <LogOut className="h-4 w-4" /> Sair
           </button>
         </div>
-      </aside>
+      </div>
 
-      {/* MAIN CONTENT AREA */}
-      <main className="flex-1 p-6 md:p-8 overflow-y-auto max-h-screen">
+      {/* HORIZONTAL TAB NAVIGATION */}
+      <div className="overflow-x-auto" style={{ background: "#1A1A1A", borderBottom: `1px solid ${GOLD}12` }}>
+        <div className="flex px-4">
+          {[
+            { id: 'dash', Icon: TrendingUp, label: "Dashboard" },
+            { id: 'pdv', Icon: ShoppingCart, label: "PDV Rápido" },
+            { id: 'clientes', Icon: Users, label: "Clientes" },
+            { id: 'estoque', Icon: Package, label: "Estoque" },
+            { id: 'mkt', Icon: Sparkles, label: "Marketing" }
+          ].map(({ id, Icon, label }) => (
+            <button 
+              key={id} 
+              onClick={() => setActiveTab(id as any)} 
+              className="flex items-center gap-2 px-6 py-4 text-xs uppercase whitespace-nowrap transition-all border-b-2 font-tagline tracking-widest" 
+              style={{ 
+                color: activeTab === id ? GOLD : "rgba(249,247,248,0.38)", 
+                borderColor: activeTab === id ? GOLD : "transparent" 
+              }}
+            >
+              <Icon size={13} />{label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <main className="flex-1 p-6 md:p-8 max-w-7xl mx-auto w-full">
         
         {/* TABA 1: DASHBOARD */}
         {activeTab === 'dash' && (

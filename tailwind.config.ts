@@ -20,7 +20,7 @@ export default {
         body: ['var(--font-lora)', 'serif'],
         headline: ['var(--font-lora)', 'serif'],
         display: ['var(--font-soligant)', 'serif'],
-        tagline: ['var(--font-identification-05c)', 'sans-serif'],
+        tagline: ['var(--font-lora)', 'serif'],
         code: ['monospace'],
       },
       colors: {
