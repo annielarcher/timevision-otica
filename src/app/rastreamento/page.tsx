@@ -42,6 +42,7 @@ export default function RastreamentoPage() {
       const cleanQuery = query.trim().toUpperCase().replace(/[.-]/g, "");
 
       const found = sales.find((s) => {
+        if (s.status === 'orcamento') return false;
         const cleanCpf = s.clienteCpf.replace(/[.-]/g, "");
         return (
           s.id.toUpperCase() === cleanQuery || 
