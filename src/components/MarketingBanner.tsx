@@ -4,7 +4,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Download, Sparkles, Image as ImageIcon, Type, Calendar, HelpCircle, RefreshCw, ImportIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Phone } from 'lucide-react';
+import { Phone, QrCode, Maximize } from 'lucide-react';
+import QRCode from 'qrcode';
 
 type PresetTemplate = 'igreja' | 'b2b' | 'discount' | 'custom';
 
@@ -57,7 +58,7 @@ const TEMPLATE_PRESETS: Record<PresetTemplate, PresetConfig> = {
   },
 };
 
-export default function MarketingFlyer() {
+export default function MarketingBanner() {
   const { toast } = useToast();
   const [template, setTemplate] = useState<PresetTemplate>('igreja');
   const [title, setTitle] = useState(TEMPLATE_PRESETS.igreja.title);
@@ -66,6 +67,10 @@ export default function MarketingFlyer() {
   const [details, setDetails] = useState(TEMPLATE_PRESETS.igreja.details);
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   
+  // Banner Specific States
+  const [bannerSize, setBannerSize] = useState<'rollup' | 'poster'>('rollup');
+  const [qrUrl, setQrUrl] = useState('https://www.timevision.com.br/inscricao-evento');
+  
   // Custom Styling and Position States
   const [titleColor, setTitleColor] = useState('#900D13');
   const [taglineColor, setTaglineColor] = useState('#900D13');
@@ -73,12 +78,12 @@ export default function MarketingFlyer() {
   const [promoTextColor, setPromoTextColor] = useState('#F9F7F8');
   const [detailsColor, setDetailsColor] = useState('#585858');
 
-  const [titleY, setTitleY] = useState(210);
-  const [taglineY, setTaglineY] = useState(270);
-  const [imageY, setImageY] = useState(540);
-  const [imageSize, setImageSize] = useState(200);
-  const [promoY, setPromoY] = useState(780);
-  const [detailsY, setDetailsY] = useState(930);
+  const [titleY, setTitleY] = useState(300);
+  const [taglineY, setTaglineY] = useState(400);
+  const [imageY, setImageY] = useState(800);
+  const [imageSize, setImageSize] = useState(250);
+  const [promoY, setPromoY] = useState(1300);
+  const [detailsY, setDetailsY] = useState(1500);
   
   const [isExporting, setIsExporting] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -105,164 +110,178 @@ export default function MarketingFlyer() {
     }
   };
 
-  const drawFlyerOnCanvas = (ctx: CanvasRenderingContext2D, width: number, height: number): Promise<void> => {
-    return new Promise((resolve) => {
-      const bgImg = new Image();
-      
-      const drawContent = () => {
-        // Helper: draw title and tagline on top of everything
-        const drawTitles = () => {
-          ctx.textAlign = 'center';
-          // 3. Draw Title
-          ctx.fillStyle = titleColor;
-          let titleFontSize = 64;
-          ctx.font = `bold ${titleFontSize}px Lora`;
-          while (ctx.measureText(title.toUpperCase()).width > width - 80 && titleFontSize > 30) {
-            titleFontSize -= 2;
-            ctx.font = `bold ${titleFontSize}px Lora`;
-          }
-          ctx.fillText(title.toUpperCase(), width / 2, titleY);
-
-          // 4. Draw Tagline
-          ctx.fillStyle = taglineColor;
-          let taglineFontSize = 32;
-          ctx.font = `bold ${taglineFontSize}px   Lora`;
-          while (ctx.measureText(tagline).width > width - 80 && taglineFontSize > 18) {
-            taglineFontSize -= 2;
-            ctx.font = `bold ${taglineFontSize}px Lora`;
-          }
-          ctx.fillText(tagline, width / 2, taglineY);
+  const drawBannerOnCanvas = async (ctx: CanvasRenderingContext2D, width: number, height: number): Promise<void> => {
+    const drawBackground = (): Promise<void> => {
+      return new Promise((resolve) => {
+        const bgImg = new Image();
+        bgImg.onload = () => {
+          // Draw cover style to avoid stretching
+          const scale = Math.max(width / bgImg.width, height / bgImg.height);
+          const drawWidth = bgImg.width * scale;
+          const drawHeight = bgImg.height * scale;
+          const dx = (width - drawWidth) / 2;
+          const dy = (height - drawHeight) / 2;
+          ctx.drawImage(bgImg, dx, dy, drawWidth, drawHeight);
+          resolve();
         };
+        bgImg.onerror = () => {
+          // Fallback to gradient if SVG fails to load
+          const gradient = ctx.createLinearGradient(0, 0, 0, height);
+          const colors = TEMPLATE_PRESETS[template].bgGradient;
+          gradient.addColorStop(0, colors[0]);
+          gradient.addColorStop(1, colors[1]);
+          ctx.fillStyle = gradient;
+          ctx.fillRect(0, 0, width, height);
+          
+          ctx.fillStyle = '#B5996A';
+          ctx.fillRect(0, 0, width, 15);
+          ctx.fillStyle = '#e2e8f0';
+          ctx.font = 'bold 36px Helvetica';
+          ctx.textAlign = 'center';
+          ctx.fillText('TIMEVISION ÓTICA', width / 2, 90);
+          resolve();
+        };
+        bgImg.src = '/templates/template-feed.svg';
+      });
+    };
 
-        // 5. Draw Frame/Product Image if uploaded
-        if (uploadedImage) {
-          const img = new Image();
-          img.onload = () => {
-            // Draw circle crop frame for product
-            ctx.save();
-            ctx.beginPath();
-            ctx.arc(width / 2, imageY, imageSize, 0, Math.PI * 2);
-            ctx.clip();
-            const scale = Math.max((imageSize * 2) / img.width, (imageSize * 2) / img.height);
-            const x = width / 2 - (img.width * scale) / 2;
-            const y = imageY - (img.height * scale) / 2;
-            ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
-            ctx.restore();
-            // Outer Gold ring for cropped product image
-            ctx.strokeStyle = '#e0a020';
-            ctx.lineWidth = 8;
-            ctx.beginPath();
-            ctx.arc(width / 2, imageY, imageSize, 0, Math.PI * 2);
-            ctx.stroke();
-            // Draw text on top of image
-            drawTitles();
-            drawTextFooter(ctx, width, height);
-            resolve();
-          };
-          img.src = uploadedImage;
-        } else {
-          // Load default model image as placeholder
-          const defaultImg = new Image();
-          defaultImg.onload = () => {
-            ctx.save();
-            ctx.beginPath();
-            ctx.arc(width / 2, imageY, imageSize, 0, Math.PI * 2);
-            ctx.clip();
-            const scale = Math.max((imageSize * 2) / defaultImg.width, (imageSize * 2) / defaultImg.height);
-            const dx = width / 2 - (defaultImg.width * scale) / 2;
-            const dy = imageY - (defaultImg.height * scale) / 2;
-            ctx.drawImage(defaultImg, dx, dy, defaultImg.width * scale, defaultImg.height * scale);
-            ctx.restore();
-            // Outer Gold ring
-            ctx.strokeStyle = '#B5996A';
-            ctx.lineWidth = 8;
-            ctx.beginPath();
-            ctx.arc(width / 2, imageY, imageSize, 0, Math.PI * 2);
-            ctx.stroke();
-            // Draw text on top of image
-            drawTitles();
-            drawTextFooter(ctx, width, height);
-            resolve();
-          };
-          defaultImg.onerror = () => {
-            // Fallback: no image, just draw text
-            drawTitles();
-            drawTextFooter(ctx, width, height);
-            resolve();
-          };
-          defaultImg.src = '/images/flyer-model-default.png';
-        }
-      };
-
-      bgImg.onload = () => {
-        ctx.drawImage(bgImg, 0, 0, width, height);
-        drawContent();
-      };
-      
-      bgImg.onerror = () => {
-        // Fallback to background gradient drawing
-        const gradient = ctx.createLinearGradient(0, 0, 0, height);
-        const colors = TEMPLATE_PRESETS[template].bgGradient;
-        gradient.addColorStop(0, colors[0]);
-        gradient.addColorStop(1, colors[1]);
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, width, height);
-        drawContent();
-      };
-      
-      bgImg.src = '/templates/template-feed.svg';
-    });
-  };
-
-  const drawTextFooter = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
-    // 6. Draw Promotional Offer Text
-    ctx.textAlign = 'center';
-    
-    // Draw rounded background block for promo text
-    ctx.fillStyle = promoBgColor;
-    ctx.fillRect(80, promoY, width - 160, 90);
-    
-    let promoFontSize = 44;
-    ctx.font = `bold ${promoFontSize}px Lora`;
-    const maxPromoWidth = width - 220;
-    while (ctx.measureText(promoText.toUpperCase()).width > maxPromoWidth && promoFontSize > 20) {
-      promoFontSize -= 2;
-      ctx.font = `bold ${promoFontSize}px Lora`;
-    }
-    
-    ctx.fillStyle = promoTextColor; // Custom text color
-    const textY = promoY + 45 + (promoFontSize * 0.35);
-    ctx.fillText(promoText.toUpperCase(), width / 2, textY);
-
-    // 7. Draw Campaign Details
-    ctx.fillStyle = detailsColor;
-    ctx.font = 'normal 26px Lora';
-    const wrappedLines = [];
-    const words = details.split(' ');
-    let currentLine = '';
-    
-    for (let word of words) {
-      const testLine = currentLine + word + ' ';
-      const metrics = ctx.measureText(testLine);
-      if (metrics.width > width - 120 && currentLine !== '') {
-        wrappedLines.push(currentLine);
-        currentLine = word + ' ';
-      } else {
-        currentLine = testLine;
+    const drawTitles = () => {
+      ctx.textAlign = 'center';
+      // Draw Title
+      ctx.fillStyle = titleColor;
+      let titleFontSize = 72;
+      ctx.font = `bold ${titleFontSize}px Lora`;
+      while (ctx.measureText(title.toUpperCase()).width > width - 100 && titleFontSize > 30) {
+        titleFontSize -= 2;
+        ctx.font = `bold ${titleFontSize}px Lora`;
       }
-    }
-    wrappedLines.push(currentLine);
+      ctx.fillText(title.toUpperCase(), width / 2, titleY);
 
-    let currentDetailsY = detailsY;
-    for (let line of wrappedLines) {
-      ctx.fillText(line.trim(), width / 2, currentDetailsY);
-      currentDetailsY += 36;
-    }
+      // Draw Tagline
+      ctx.fillStyle = taglineColor;
+      let taglineFontSize = 42;
+      ctx.font = `bold ${taglineFontSize}px Lora`;
+      while (ctx.measureText(tagline).width > width - 100 && taglineFontSize > 22) {
+        taglineFontSize -= 2;
+        ctx.font = `bold ${taglineFontSize}px Lora`;
+      }
+      ctx.fillText(tagline, width / 2, taglineY);
+    };
 
-    // 8. Footer CTA
-    ctx.fillStyle = '#585858';
-    ctx.font = 'bold 22px Lora';
-    ctx.fillText('☎ (21) 97769-6374' + '  \n  ' + 'www.timevision.com.br', width / 2, height - 60);
+    const drawProductImage = (): Promise<void> => {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(width / 2, imageY, imageSize, 0, Math.PI * 2);
+          ctx.clip();
+          const scale = Math.max((imageSize * 2) / img.width, (imageSize * 2) / img.height);
+          const dx = width / 2 - (img.width * scale) / 2;
+          const dy = imageY - (img.height * scale) / 2;
+          ctx.drawImage(img, dx, dy, img.width * scale, img.height * scale);
+          ctx.restore();
+          
+          // Outer Gold ring
+          ctx.strokeStyle = '#B5996A';
+          ctx.lineWidth = 10;
+          ctx.beginPath();
+          ctx.arc(width / 2, imageY, imageSize, 0, Math.PI * 2);
+          ctx.stroke();
+          resolve();
+        };
+        img.onerror = resolve;
+        img.src = uploadedImage || '/images/flyer-model-default.png';
+      });
+    };
+
+    const drawTextFooter = async () => {
+      // Draw Promotional Offer Text
+      ctx.textAlign = 'center';
+      ctx.fillStyle = promoBgColor;
+      ctx.fillRect(80, promoY, width - 160, 100);
+      
+      let promoFontSize = 52;
+      ctx.font = `bold ${promoFontSize}px Lora`;
+      const maxPromoWidth = width - 220;
+      while (ctx.measureText(promoText.toUpperCase()).width > maxPromoWidth && promoFontSize > 24) {
+        promoFontSize -= 2;
+        ctx.font = `bold ${promoFontSize}px Lora`;
+      }
+      
+      ctx.fillStyle = promoTextColor;
+      const textY = promoY + 50 + (promoFontSize * 0.35);
+      ctx.fillText(promoText.toUpperCase(), width / 2, textY);
+
+      // Draw Campaign Details
+      ctx.fillStyle = detailsColor;
+      ctx.font = 'normal 32px Lora';
+      const wrappedLines = [];
+      const words = details.split(' ');
+      let currentLine = '';
+      
+      for (let word of words) {
+        const testLine = currentLine + word + ' ';
+        const metrics = ctx.measureText(testLine);
+        if (metrics.width > width - 120 && currentLine !== '') {
+          wrappedLines.push(currentLine);
+          currentLine = word + ' ';
+        } else {
+          currentLine = testLine;
+        }
+      }
+      wrappedLines.push(currentLine);
+
+      let currentDetailsY = detailsY;
+      for (let line of wrappedLines) {
+        ctx.fillText(line.trim(), width / 2, currentDetailsY);
+        currentDetailsY += 44;
+      }
+
+      // Draw QR Code
+      if (qrUrl) {
+        try {
+          const qrDataUrl = await QRCode.toDataURL(qrUrl, {
+            margin: 1,
+            width: 250,
+            color: { dark: '#000000', light: '#ffffff' }
+          });
+          
+          return new Promise<void>((resolve) => {
+            const qrImg = new Image();
+            qrImg.onload = () => {
+              const qrY = height - 380;
+              // Draw white background box for QR to stand out
+              ctx.fillStyle = '#ffffff';
+              ctx.beginPath();
+              ctx.roundRect(width / 2 - 140, qrY - 15, 280, 280, 16);
+              ctx.fill();
+              
+              ctx.drawImage(qrImg, width / 2 - 125, qrY, 250, 250);
+              
+              // CTA text below QR
+              ctx.fillStyle = '#e2e8f0';
+              ctx.font = 'bold 24px Lora';
+              ctx.fillText('Escaneie para se Inscrever', width / 2, qrY + 300);
+              resolve();
+            };
+            qrImg.src = qrDataUrl;
+          });
+        } catch (err) {
+          console.error("Failed to generate QR Code", err);
+        }
+      }
+
+      // Footer contact
+      ctx.fillStyle = '#585858';
+      ctx.font = 'bold 24px Lora';
+      ctx.fillText('☎ (21) 97769-6374' + '  \n  ' + 'www.timevision.com.br', width / 2, height - 20);
+    };
+
+    await drawBackground();
+    drawTitles();
+    await drawProductImage();
+    await drawTextFooter();
   };
 
   // Re-draw preview whenever settings change
@@ -272,13 +291,13 @@ export default function MarketingFlyer() {
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        drawFlyerOnCanvas(ctx, canvas.width, canvas.height);
+        drawBannerOnCanvas(ctx, canvas.width, canvas.height);
       }
     }
   }, [
     title, tagline, promoText, details, uploadedImage, template,
     titleColor, taglineColor, promoBgColor, promoTextColor, detailsColor,
-    titleY, taglineY, imageY, imageSize, promoY, detailsY
+    titleY, taglineY, imageY, imageSize, promoY, detailsY, bannerSize, qrUrl
   ]);
 
   const handleDownload = () => {
@@ -303,20 +322,22 @@ export default function MarketingFlyer() {
     setIsExporting(true);
     try {
       const { jsPDF } = await import('jspdf');
-      // A6 in mm: 105 x 148
+      const isRollup = bannerSize === 'rollup';
+      const pdfFormat = isRollup ? [90, 200] : [60, 90]; // cm dimensions
+      
       const doc = new jsPDF({
         orientation: 'portrait',
-        unit: 'mm',
-        format: [105, 148],
+        unit: 'cm',
+        format: pdfFormat,
       });
       // Convert canvas to JPEG for smaller PDF size
       const imgData = canvas.toDataURL('image/jpeg', 0.95);
-      // Fill the full A6 page
-      doc.addImage(imgData, 'JPEG', 0, 0, 105, 148);
-      doc.save(`flyer-timevision-${template}-grafica.pdf`);
+      
+      doc.addImage(imgData, 'JPEG', 0, 0, pdfFormat[0], pdfFormat[1]);
+      doc.save(`banner-timevision-${template}-${bannerSize}.pdf`);
       toast({
         title: 'PDF Gerado',
-        description: 'Arquivo A6 para gráfica baixado com sucesso!',
+        description: 'Arquivo em alta qualidade baixado com sucesso!',
       });
     } catch (error) {
       console.error('Erro ao gerar PDF:', error);
@@ -393,6 +414,47 @@ export default function MarketingFlyer() {
               Customizado
             </button>
           </div>
+        </div>
+
+        {/* Banner Size */}
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
+            <Maximize className="h-4 w-4 text-primary" /> Tamanho do Banner
+          </span>
+          <div className="grid grid-cols-2 gap-2 mt-1">
+            <button
+              onClick={() => setBannerSize('rollup')}
+              className={`py-2 px-3 text-xs font-bold rounded-lg border transition-all ${
+                bannerSize === 'rollup' 
+                  ? 'bg-primary border-primary text-primary-foreground shadow' 
+                  : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-800'
+              }`}
+            >
+              Roll-up (90x200cm)
+            </button>
+            <button
+              onClick={() => setBannerSize('poster')}
+              className={`py-2 px-3 text-xs font-bold rounded-lg border transition-all ${
+                bannerSize === 'poster' 
+                  ? 'bg-primary border-primary text-primary-foreground shadow' 
+                  : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-800'
+              }`}
+            >
+              Poster / Parede (60x90cm)
+            </button>
+          </div>
+        </div>
+
+        {/* QR Code Settings */}
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] uppercase font-bold text-slate-400 flex items-center gap-1"><QrCode className="h-4 w-4 text-primary" /> Link do QR Code (Inscrição)</label>
+          <input
+            type="text"
+            value={qrUrl}
+            onChange={(e) => setQrUrl(e.target.value)}
+            className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-white"
+            placeholder="https://site.com/link"
+          />
         </div>
 
         {/* Upload Image */}
@@ -656,7 +718,7 @@ export default function MarketingFlyer() {
               <input
                 type="range"
                 min="600"
-                max="1150"
+                max="1600"
                 value={detailsY}
                 onChange={(e) => setDetailsY(Number(e.target.value))}
                 className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-primary"
@@ -681,7 +743,7 @@ export default function MarketingFlyer() {
               className="flex-1 bg-[#004168] text-white hover:bg-[#004168]/90 text-sm font-bold gap-2 py-5"
             >
               <Download className="h-4.5 w-4.5" />
-              {isExporting ? 'Gerando PDF...' : 'Baixar PDF (A6 Gráfica)'}
+              {isExporting ? 'Gerando PDF...' : `Baixar PDF Gráfica`}
             </Button>
           </div>
           <Button
@@ -700,8 +762,8 @@ export default function MarketingFlyer() {
         <div className="w-[300px] h-[450px] relative overflow-hidden rounded-lg shadow-2xl border border-slate-800 bg-slate-900 flex items-center justify-center">
           <canvas
             ref={canvasRef}
-            width={800}
-            height={1200}
+            width={900}
+            height={bannerSize === 'rollup' ? 2000 : 1350}
             className="w-full h-full object-contain"
           />
         </div>
