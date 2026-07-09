@@ -177,7 +177,7 @@ export default function AdminPage() {
     e.preventDefault();
     
     // 1. Fallback / Test bypass static credentials (local mode/demo)
-    if (loginEmail === 'admin@timevision.com' && loginPassword === 'timevision123') {
+    if ((loginEmail === 'admin@timevision.com' || loginEmail === 'admin@timevision.com.br') && loginPassword === 'timevision123') {
       setIsAuthenticated(true);
       if (typeof window !== 'undefined') {
         localStorage.setItem('tv_admin_auth', 'true');
@@ -416,7 +416,7 @@ export default function AdminPage() {
                   type="email"
                   value={loginEmail}
                   onChange={(e) => setLoginEmail(e.target.value)}
-                  placeholder="admin@timevision.com"
+                  placeholder="admin@timevision.com.br"
                   className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-sm focus:outline-none focus:border-primary text-white"
                   required
                 />
@@ -458,7 +458,7 @@ export default function AdminPage() {
             </form>
           </CardContent>
           <div className="p-4 bg-slate-950 border-t border-slate-900 text-[10px] text-center text-slate-500">
-            Senha Padrão local: <span className="text-primary font-bold">timevision123</span>
+            Acesso local: <span className="text-primary font-bold">admin@timevision.com.br</span> | Senha: <span className="text-primary font-bold">timevision123</span>
           </div>
         </Card>
       </div>
