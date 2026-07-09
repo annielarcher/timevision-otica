@@ -48,6 +48,7 @@ export interface Cliente {
   telefone: string;
   endereco: string;
   criadoEm: string;
+  cadastradoPor?: string; // Tracks team member email
 }
 
 export interface Produto {
@@ -57,6 +58,7 @@ export interface Produto {
   quantidade: number;
   precoCusto: number;
   precoVenda: number;
+  criadoPor?: string; // Tracks team member email
 }
 
 export interface ReceitaVisual {
@@ -91,6 +93,27 @@ export interface Venda {
   status: 'recebido' | 'laboratorio' | 'montagem' | 'pronto' | 'entregue' | 'orcamento';
   dataVenda: string;
   validadeOrcamento?: string;
+  vendedorId?: string; // Tracks team member email
+  vendedorNome?: string; // Tracks team member name
+  eventoId?: string; // Linked promotional event ID
+}
+
+export interface Evento {
+  id: string;
+  nome: string;
+  data: string;
+  local: string;
+  status: 'ativo' | 'arquivado';
+  criadoEm: string;
+  criadoPor?: string; // Team member email
+}
+
+export interface MembroEquipe {
+  email: string;
+  nome: string;
+  emailRecuperacao?: string;
+  primeiroAcessoDone: boolean;
+  criadoEm: string;
 }
 
 // Helper generic database actions with localStorage fallback
@@ -195,7 +218,7 @@ export async function getItemById<T extends { id: string }>(collectionName: stri
   return null;
 }
 
-export async function saveLead(lead: { nome: string; whatsapp: string; email: string; exame: string; criadoEm: string }): Promise<void> {
+export async function saveLead(lead: { nome: string; whatsapp: string; email: string; exame: string; criadoEm: string; eventoId?: string }): Promise<void> {
   if (isFirebaseConfigured && db) {
     try {
       await setDoc(doc(db, 'inscricoes', `lead-${Date.now()}`), lead);

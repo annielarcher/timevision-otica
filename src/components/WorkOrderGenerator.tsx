@@ -70,11 +70,12 @@ export default function WorkOrderGenerator({ initialVenda, onClose, onSaveSucces
     doc.setFont('Helvetica', 'normal');
     doc.setFontSize(7.5);
     doc.text('Contato: oticastimevision@gmail.com  |  Tel: (21) 99999-9999', 12, yOffset + 19);
+    const vendedorNome = initialVenda?.vendedorNome || 'Consultor';
     if (isOrcamento) {
       const validDate = new Date(new Date(orderDate).getTime() + 7 * 86400000).toLocaleDateString('pt-BR');
-      doc.text(`Data da Proposta: ${new Date(orderDate).toLocaleDateString('pt-BR')}  |  Validade: 7 dias (Até ${validDate})`, 12, yOffset + 22.5);
+      doc.text(`Data da Proposta: ${new Date(orderDate).toLocaleDateString('pt-BR')}  |  Validade: 7 dias (Até ${validDate})  |  Vendedor: ${vendedorNome}`, 12, yOffset + 22.5);
     } else {
-      doc.text(`Data do Pedido: ${new Date(orderDate).toLocaleDateString('pt-BR')}  |  Garantia: ${warrantyMonths} meses`, 12, yOffset + 22.5);
+      doc.text(`Data do Pedido: ${new Date(orderDate).toLocaleDateString('pt-BR')}  |  Garantia: ${warrantyMonths} meses  |  Vendedor: ${vendedorNome}`, 12, yOffset + 22.5);
     }
 
     // Client Info Box
@@ -150,6 +151,9 @@ export default function WorkOrderGenerator({ initialVenda, onClose, onSaveSucces
     doc.line(15, sigY, 95, sigY);
     doc.setFontSize(7);
     doc.text('Assinatura do Consultor Óptico', 15, sigY + 3.5);
+    doc.setFont('Helvetica', 'bold');
+    doc.text(`Consultor: ${vendedorNome}`, 15, sigY + 7);
+    doc.setFont('Helvetica', 'normal');
 
     doc.line(110, sigY, 190, sigY);
     doc.text('Assinatura do Cliente (Aceite e Termos)', 110, sigY + 3.5);

@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Sparkles, CalendarCheck, MapPin, CheckCircle2 } from 'lucide-react';
-import { saveLead } from '@/lib/firebase';
+import { saveLead, getItems, Evento } from '@/lib/firebase';
 
 export default function EventRegistrationPage() {
   const [nome, setNome] = useState('');
@@ -13,6 +13,26 @@ export default function EventRegistrationPage() {
   const [exame, setExame] = useState('sim');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  
+  const [eventData, setEventData] = useState<Evento | null>(null);
+  const [eventoId, setEventoId] = useState<string>('');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const evId = params.get('evento') || '';
+      setEventoId(evId);
+
+      if (evId) {
+        getItems<Evento>('eventos').then(events => {
+          const found = events.find(e => e.id === evId);
+          if (found) {
+            setEventData(found);
+          }
+        });
+      }
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,7 +43,8 @@ export default function EventRegistrationPage() {
         whatsapp,
         email,
         exame,
-        criadoEm: new Date().toISOString()
+        criadoEm: new Date().toISOString(),
+        eventoId: eventoId || undefined
       });
       setIsSuccess(true);
     } catch (err) {
@@ -84,15 +105,19 @@ export default function EventRegistrationPage() {
               </CardDescription>
             </CardHeader>
             
-            {/* Informações do Evento Padrão */}
+            {/* Informações do Evento Dinâmico ou Padrão */}
             <div className="px-6 py-4 mx-6 mb-4 bg-slate-950 rounded-xl border border-slate-800 flex flex-col gap-3">
               <div className="flex items-center gap-3 text-slate-300">
-                <CalendarCheck className="h-5 w-5 text-brand-gold" />
-                <span className="text-sm font-semibold">Em breve (Data a definir)</span>
+                <CalendarCheck className="h-5 w-5 text-brand-gold animate-pulse" />
+                <span className="text-sm font-semibold">
+                  {eventData ? new Date(eventData.data).toLocaleDateString('pt-BR') : 'Em breve (Data a definir)'}
+                </span>
               </div>
               <div className="flex items-center gap-3 text-slate-300">
                 <MapPin className="h-5 w-5 text-brand-gold" />
-                <span className="text-sm font-semibold">Local do Evento</span>
+                <span className="text-sm font-semibold">
+                  {eventData ? `${eventData.nome} — ${eventData.local}` : 'Ação de Saúde Visual / Social'}
+                </span>
               </div>
             </div>
 

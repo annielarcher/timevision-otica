@@ -3,14 +3,14 @@
 import React, { useState, useEffect } from 'react';
 import { 
   TrendingUp, Users, Package, ShoppingCart, Sparkles, LogOut, Lock, 
-  Search, Plus, Trash2, Edit3, CheckCircle, Clock, Eye, AlertTriangle 
+  Search, Plus, Trash2, Edit3, CheckCircle, Clock, Eye, AlertTriangle, Calendar
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { 
   getItems, saveItem, deleteItem, updateItemStatus,
-  Cliente, Produto, Venda, ReceitaVisual, auth
+  Cliente, Produto, Venda, ReceitaVisual, auth, Evento, MembroEquipe
 } from '@/lib/firebase';
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import dynamic from 'next/dynamic';
@@ -28,17 +28,38 @@ export default function AdminPage() {
   const [isFirebaseMode, setIsFirebaseMode] = useState(false);
   
   // Navigation Tabs
-  const [activeTab, setActiveTab] = useState<'dash' | 'pdv' | 'clientes' | 'estoque' | 'mkt'>('dash');
+  const [activeTab, setActiveTab] = useState<'dash' | 'pdv' | 'clientes' | 'estoque' | 'eventos' | 'mkt'>('dash');
   const [marketingMode, setMarketingMode] = useState<'flyer' | 'banner'>('flyer');
 
   // Database states
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [vendas, setVendas] = useState<Venda[]>([]);
+  const [eventos, setEventos] = useState<Evento[]>([]);
+  const [leads, setLeads] = useState<any[]>([]);
+  const [equipe, setEquipe] = useState<MembroEquipe[]>([]);
 
-  // Search and Filter states
+  // Multi-user Auth states
+  const [currentUser, setCurrentUser] = useState<{ email: string; nome: string } | null>(null);
+  const [isFirstAccess, setIsFirstAccess] = useState(false);
+  const [firstAccessName, setFirstAccessName] = useState('');
+  const [firstAccessPassword, setFirstAccessPassword] = useState('');
+  const [firstAccessRecovery, setFirstAccessRecovery] = useState('');
+  
+  // Password Recovery States
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
+  const [recoveryInputEmail, setRecoveryInputEmail] = useState('');
+  const [recoveryInputGmail, setRecoveryInputGmail] = useState('');
+
+  // Event modal/editor
+  const [isEventModalOpen, setIsEventModalOpen] = useState(false);
+  const [editingEvento, setEditingEvento] = useState<Evento | null>(null);
+
+  // Search, Filter and Vendor tracking states
   const [searchClient, setSearchClient] = useState('');
   const [searchProduct, setSearchProduct] = useState('');
+  const [selectedEventoId, setSelectedEventoId] = useState<string>('todos');
+  const [selectedVendedorId, setSelectedVendedorId] = useState<string>('todos');
 
   // Modals / Editors
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
@@ -52,6 +73,7 @@ export default function AdminPage() {
   // PDV Order state
   const [pdvSaleType, setPdvSaleType] = useState<'venda' | 'orcamento'>('venda');
   const [pdvClienteId, setPdvClienteId] = useState('');
+  const [pdvEventoId, setPdvEventoId] = useState('');
   const [pdvFrameId, setPdvFrameId] = useState('');
   const [pdvLensId, setPdvLensId] = useState('');
   const [pdvPriceTotal, setPdvPriceTotal] = useState(0);
@@ -132,20 +154,46 @@ export default function AdminPage() {
         ];
         localStorage.setItem('tv_vendas', JSON.stringify(mockSales));
       }
+
+      const storedEvents = localStorage.getItem('tv_eventos');
+      if (!storedEvents) {
+        const mockEvents: Evento[] = [
+          { id: 'ev-1', nome: 'Ação Social Igreja de Nilópolis', data: '2026-08-15', local: 'Rua Principal, Nilópolis', status: 'ativo', criadoEm: new Date().toISOString() },
+          { id: 'ev-2', nome: 'Feira Industrial Saúde Visual', data: '2026-09-10', local: 'Auditório Firjan, Centro', status: 'ativo', criadoEm: new Date().toISOString() }
+        ];
+        localStorage.setItem('tv_eventos', JSON.stringify(mockEvents));
+      }
+
+      const storedEquipe = localStorage.getItem('tv_equipe');
+      if (!storedEquipe) {
+        const mockEquipe: MembroEquipe[] = [
+          { email: 'ana@timevision.com.br', nome: 'Ana', primeiroAcessoDone: false, criadoEm: new Date().toISOString() },
+          { email: 'moises@timevision.com.br', nome: 'Moisés', primeiroAcessoDone: false, criadoEm: new Date().toISOString() },
+          { email: 'alef@timevision.com.br', nome: 'Alef', primeiroAcessoDone: false, criadoEm: new Date().toISOString() },
+          { email: 'annie@timevision.com.br', nome: 'Annie', primeiroAcessoDone: false, criadoEm: new Date().toISOString() }
+        ];
+        localStorage.setItem('tv_equipe', JSON.stringify(mockEquipe));
+      }
     }
   };
 
   // 2. Fetch Data from Storage/Firebase
   const loadData = async () => {
     try {
-      const [cList, pList, vList] = await Promise.all([
+      const [cList, pList, vList, eList, lList, eqList] = await Promise.all([
         getItems<Cliente>('clientes'),
         getItems<Produto>('produtos'),
-        getItems<Venda>('vendas')
+        getItems<Venda>('vendas'),
+        getItems<Evento>('eventos'),
+        getItems<any>('inscricoes'),
+        getItems<MembroEquipe>('equipe')
       ]);
       setClientes(cList);
       setProdutos(pList);
       setVendas(vList);
+      setEventos(eList);
+      setLeads(lList);
+      setEquipe(eqList);
     } catch (error) {
       console.error('Error loading DB:', error);
     }
@@ -158,7 +206,23 @@ export default function AdminPage() {
       const isAuth = localStorage.getItem('tv_admin_auth') === 'true';
       if (isAuth) {
         setIsAuthenticated(true);
+        const storedUser = localStorage.getItem('tv_admin_user');
+        if (storedUser) {
+          setCurrentUser(JSON.parse(storedUser));
+        }
         loadData();
+      }
+
+      // Check if this is a password reset redirect
+      const params = new URLSearchParams(window.location.search);
+      const resetEmail = params.get('reset_email');
+      if (resetEmail) {
+        setLoginEmail(resetEmail);
+        setIsFirstAccess(true);
+        toast({
+          title: 'Redefinição de Senha',
+          description: 'Defina sua nova senha de acesso abaixo.',
+        });
       }
     }
   }, []);
@@ -175,52 +239,219 @@ export default function AdminPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // 1. Fallback / Test bypass static credentials (local mode/demo)
-    if (!auth && (loginEmail === 'admin@timevision.com' || loginEmail === 'admin@timevision.com.br') && loginPassword === 'timevision123') {
+    const emailLower = loginEmail.toLowerCase().trim();
+
+    // 1. Master Bypass local (offline/demo fallback)
+    if (!auth && emailLower === 'admin@timevision.com.br' && loginPassword === 'timevision123') {
       setIsAuthenticated(true);
+      setCurrentUser({ email: 'admin@timevision.com.br', nome: 'Administrador Principal' });
       if (typeof window !== 'undefined') {
         localStorage.setItem('tv_admin_auth', 'true');
+        localStorage.setItem('tv_admin_user', JSON.stringify({ email: 'admin@timevision.com.br', nome: 'Administrador Principal' }));
       }
       loadData();
       toast({
         title: 'Bem-vindo(a) (Bypass de Testes)',
-        description: 'Login efetuado no modo local/offline, ignorando o Firebase Auth.',
+        description: 'Login efetuado no modo local/offline.',
       });
       return;
     }
 
-    // 2. Se o Firebase estiver configurado e o auth inicializado, tenta autenticação Firebase
+    // 2. Check if email belongs to authorized team
+    const teamMember = equipe.find(m => m.email.toLowerCase() === emailLower);
+    if (!teamMember) {
+      toast({
+        variant: 'destructive',
+        title: 'Acesso Negado',
+        description: 'Este e-mail não faz parte da equipe autorizada.',
+      });
+      return;
+    }
+
+    // 3. First Access Flow
+    if (!teamMember.primeiroAcessoDone) {
+      setFirstAccessName(teamMember.nome);
+      setIsFirstAccess(true);
+      toast({
+        title: 'Primeiro Acesso Detectado',
+        description: 'Por favor, cadastre sua senha e e-mail de recuperação para continuar.',
+      });
+      return;
+    }
+
+    // 4. Authenticate
     if (auth) {
       try {
-        await signInWithEmailAndPassword(auth, loginEmail, loginPassword);
+        const userCredential = await signInWithEmailAndPassword(auth, emailLower, loginPassword);
         setIsAuthenticated(true);
+        const userProfile = { email: emailLower, nome: teamMember.nome };
+        setCurrentUser(userProfile);
         if (typeof window !== 'undefined') {
           localStorage.setItem('tv_admin_auth', 'true');
+          localStorage.setItem('tv_admin_user', JSON.stringify(userProfile));
         }
         loadData();
         toast({
           title: 'Bem-vindo(a)',
-          description: 'Login efetuado com sucesso via Firebase.',
+          description: `Login de ${teamMember.nome} efetuado com sucesso via Firebase.`,
         });
-        return;
       } catch (error: any) {
         console.error("Firebase auth error:", error);
         toast({
           variant: 'destructive',
-          title: 'Erro de Autenticação Firebase',
-          description: error.message || 'E-mail ou senha incorretos.',
+          title: 'Erro de Autenticação',
+          description: 'E-mail ou senha incorretos.',
         });
-        return;
+      }
+    } else {
+      // Local/Offline auth: Read password from equipe document
+      const localPassword = localStorage.getItem(`tv_pwd_${emailLower}`);
+      if (localPassword === loginPassword) {
+        setIsAuthenticated(true);
+        const userProfile = { email: emailLower, nome: teamMember.nome };
+        setCurrentUser(userProfile);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('tv_admin_auth', 'true');
+          localStorage.setItem('tv_admin_user', JSON.stringify(userProfile));
+        }
+        loadData();
+        toast({
+          title: 'Bem-vindo(a) (Modo Local)',
+          description: `Login de ${teamMember.nome} efetuado com sucesso.`,
+        });
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Erro de Autenticação',
+          description: 'E-mail ou senha incorretos.',
+        });
       }
     }
+  };
 
-    // Se as credenciais locais falharem e não houver Firebase/outro meio
-    toast({
-      variant: 'destructive',
-      title: 'Erro de Autenticação',
-      description: 'E-mail ou senha incorretos.',
-    });
+  const handleFirstAccessSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const emailLower = loginEmail.toLowerCase().trim();
+    const teamMember = equipe.find(m => m.email.toLowerCase() === emailLower);
+    if (!teamMember) return;
+
+    if (firstAccessPassword.length < 6) {
+      toast({
+        variant: 'destructive',
+        title: 'Senha Fraca',
+        description: 'A senha deve conter no mínimo 6 caracteres.',
+      });
+      return;
+    }
+
+    try {
+      if (auth) {
+        const { createUserWithEmailAndPassword } = await import('firebase/auth');
+        await createUserWithEmailAndPassword(auth, emailLower, firstAccessPassword);
+      } else {
+        localStorage.setItem(`tv_pwd_${emailLower}`, firstAccessPassword);
+      }
+
+      // Save updated team member profile
+      const updatedMember: MembroEquipe = {
+        ...teamMember,
+        nome: firstAccessName,
+        emailRecuperacao: firstAccessRecovery,
+        primeiroAcessoDone: true
+      };
+
+      await saveItem('equipe', updatedMember);
+      
+      // Update state
+      setEquipe(prev => prev.map(m => m.email === emailLower ? updatedMember : m));
+      setIsAuthenticated(true);
+      const userProfile = { email: emailLower, nome: firstAccessName };
+      setCurrentUser(userProfile);
+      
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('tv_admin_auth', 'true');
+        localStorage.setItem('tv_admin_user', JSON.stringify(userProfile));
+      }
+
+      setIsFirstAccess(false);
+      loadData();
+
+      toast({
+        title: 'Cadastro Realizado!',
+        description: `Seu usuário ${firstAccessName} foi cadastrado e logado.`,
+      });
+    } catch (err: any) {
+      console.error('Error in first access registration:', err);
+      toast({
+        variant: 'destructive',
+        title: 'Erro no Cadastro',
+        description: err.message || 'Erro ao registrar usuário. Tente novamente.',
+      });
+    }
+  };
+
+  const handlePasswordRecovery = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const emailLower = recoveryInputEmail.toLowerCase().trim();
+    const teamMember = equipe.find(m => m.email.toLowerCase() === emailLower);
+
+    if (!teamMember) {
+      toast({
+        variant: 'destructive',
+        title: 'Usuário não encontrado',
+        description: 'E-mail não faz parte da equipe autorizada.',
+      });
+      return;
+    }
+
+    if (!teamMember.primeiroAcessoDone) {
+      toast({
+        variant: 'destructive',
+        title: 'Ação Bloqueada',
+        description: 'Este usuário ainda não realizou o primeiro acesso para configurar a senha.',
+      });
+      return;
+    }
+
+    if (teamMember.emailRecuperacao !== recoveryInputGmail) {
+      toast({
+        variant: 'destructive',
+        title: 'Verificação Falhou',
+        description: 'O e-mail de recuperação não coincide com o e-mail cadastrado.',
+      });
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: emailLower, recoveryEmail: recoveryInputGmail })
+      });
+      
+      const resData = await response.json();
+      
+      if (response.ok) {
+        toast({
+          title: 'Redefinição Enviada',
+          description: `Um link de redefinição foi gerado para o e-mail: ${recoveryInputGmail}.`,
+        });
+        
+        // Output token link for dev console bypass helper
+        if (resData.debugLink) {
+          console.log(`[DEVS RESET LINK]: ${resData.debugLink}`);
+        }
+        setIsForgotPassword(false);
+      } else {
+        throw new Error(resData.error || 'Erro na API.');
+      }
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao redefinir',
+        description: error.message || 'Falha ao solicitar redefinição. Tente novamente.',
+      });
+    }
   };
 
   const handleLogout = async () => {
@@ -250,7 +481,8 @@ export default function AdminPage() {
       email: formData.get('email') as string,
       telefone: formData.get('telefone') as string,
       endereco: formData.get('endereco') as string,
-      criadoEm: editingCliente?.criadoEm || new Date().toISOString()
+      criadoEm: editingCliente?.criadoEm || new Date().toISOString(),
+      cadastradoPor: editingCliente?.cadastradoPor || currentUser?.email || 'admin@timevision.com.br'
     };
 
     if (!clientData.nome || !clientData.cpf) {
@@ -279,6 +511,7 @@ export default function AdminPage() {
       quantidade: Number(formData.get('quantidade')),
       precoCusto: Number(formData.get('precoCusto')),
       precoVenda: Number(formData.get('precoVenda')),
+      criadoPor: editingProduto?.criadoPor || currentUser?.email || 'admin@timevision.com.br'
     };
 
     if (!productData.nome || !productData.precoVenda) {
@@ -306,6 +539,52 @@ export default function AdminPage() {
     if (confirm('Tem certeza que deseja remover este produto do estoque?')) {
       await deleteItem('produtos', id);
       toast({ title: 'Removido', description: 'Produto excluído do estoque.' });
+      loadData();
+    }
+  };
+
+  // Event Handlers
+  const handleSaveEvento = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const form = e.currentTarget as HTMLFormElement;
+    const formData = new FormData(form);
+
+    const eventData: Evento = {
+      id: editingEvento?.id || `ev-${Math.floor(1000 + Math.random() * 9000)}`,
+      nome: formData.get('nome') as string,
+      data: formData.get('data') as string,
+      local: formData.get('local') as string,
+      status: editingEvento?.status || 'ativo',
+      criadoEm: editingEvento?.criadoEm || new Date().toISOString(),
+      criadoPor: editingEvento?.criadoPor || currentUser?.email || 'admin@timevision.com.br'
+    };
+
+    if (!eventData.nome || !eventData.data) {
+      toast({ variant: 'destructive', title: 'Campos Obrigatórios', description: 'Preencha Nome e Data do evento.' });
+      return;
+    }
+
+    await saveItem('eventos', eventData);
+    toast({ title: 'Sucesso', description: 'Evento salvo com sucesso!' });
+    setIsEventModalOpen(false);
+    setEditingEvento(null);
+    loadData();
+  };
+
+  const handleArchiveEvento = async (event: Evento) => {
+    const updated: Evento = {
+      ...event,
+      status: event.status === 'ativo' ? 'arquivado' : 'ativo'
+    };
+    await saveItem('eventos', updated);
+    toast({ title: 'Status Alterado', description: `Evento ${event.status === 'ativo' ? 'arquivado' : 'ativado'} com sucesso.` });
+    loadData();
+  };
+
+  const handleDeleteEvento = async (id: string) => {
+    if (confirm('Tem certeza que deseja excluir permanentemente este evento e suas configurações? As inscrições continuarão registradas.')) {
+      await deleteItem('eventos', id);
+      toast({ title: 'Excluído', description: 'Evento removido do painel.' });
       loadData();
     }
   };
@@ -363,14 +642,33 @@ export default function AdminPage() {
       },
       status: type === 'venda' ? 'recebido' : 'orcamento',
       dataVenda: orderDate,
-      validadeOrcamento: type === 'orcamento' ? new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0] : undefined
+      validadeOrcamento: type === 'orcamento' ? new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0] : undefined,
+      vendedorId: currentUser?.email || 'admin@timevision.com.br',
+      vendedorNome: currentUser?.nome || 'Consultor Óptico',
+      eventoId: pdvEventoId !== '' ? pdvEventoId : undefined
     };
 
     setActiveOSVenda(pendingVenda);
   };
 
   // Financial Calculators
-  const realSales = vendas.filter(v => v.status !== 'orcamento');
+  const realSales = vendas.filter(v => {
+    if (v.status === 'orcamento') return false;
+    
+    // Filter by Vendedor
+    if (selectedVendedorId !== 'todos' && v.vendedorId !== selectedVendedorId) {
+      return false;
+    }
+    
+    // Filter by Evento
+    if (selectedEventoId !== 'todos') {
+      if (selectedEventoId === 'loja' && v.eventoId) return false;
+      if (selectedEventoId !== 'loja' && v.eventoId !== selectedEventoId) return false;
+    }
+    
+    return true;
+  });
+
   const totalRevenue = realSales.reduce((acc, curr) => acc + curr.valorTotal, 0);
   const totalCost = realSales.reduce((acc, curr) => acc + (curr.custoTotal || curr.valorTotal * 0.5), 0);
   const totalProfit = totalRevenue - totalCost;
@@ -397,6 +695,125 @@ export default function AdminPage() {
   const orderDate = new Date().toISOString().split('T')[0];
 
   if (!isAuthenticated) {
+    if (isFirstAccess) {
+      return (
+        <div className="min-h-[80vh] flex items-center justify-center bg-slate-950 p-4">
+          <Card className="w-full max-w-md bg-slate-900 border-slate-800 shadow-2xl relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-tr from-primary/10 via-transparent to-transparent pointer-events-none" />
+            <CardHeader className="text-center relative z-10">
+              <div className="h-12 w-12 rounded-xl bg-primary/20 flex items-center justify-center text-primary mx-auto mb-4 border border-primary/30">
+                <Sparkles className="h-6 w-6" />
+              </div>
+              <CardTitle className="text-2xl font-black font-headline text-white">Primeiro Acesso / Redefinição</CardTitle>
+              <CardDescription>Cadastre seus dados para ativar a conta de {loginEmail}.</CardDescription>
+            </CardHeader>
+            <CardContent className="relative z-10">
+              <form onSubmit={handleFirstAccessSubmit} className="space-y-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Seu Nome</label>
+                  <input
+                    type="text"
+                    value={firstAccessName}
+                    onChange={(e) => setFirstAccessName(e.target.value)}
+                    placeholder="Seu Nome Completo"
+                    className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-sm focus:outline-none focus:border-primary text-white"
+                    required
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Senha de Acesso (Min. 6 digitos)</label>
+                  <input
+                    type="password"
+                    value={firstAccessPassword}
+                    onChange={(e) => setFirstAccessPassword(e.target.value)}
+                    placeholder="Sua senha desejada"
+                    className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-sm focus:outline-none focus:border-primary text-white"
+                    required
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">E-mail de Recuperação (Gmail, Hotmail, etc.)</label>
+                  <input
+                    type="email"
+                    value={firstAccessRecovery}
+                    onChange={(e) => setFirstAccessRecovery(e.target.value)}
+                    placeholder="seu.pessoal@gmail.com"
+                    className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-sm focus:outline-none focus:border-primary text-white"
+                    required
+                  />
+                </div>
+                <Button type="submit" className="w-full bg-primary text-primary-foreground hover:bg-primary/90 py-5 font-bold">
+                  Salvar e Acessar Painel
+                </Button>
+                <Button 
+                  type="button" 
+                  onClick={() => setIsFirstAccess(false)} 
+                  variant="ghost" 
+                  className="w-full text-slate-400 font-bold"
+                >
+                  Voltar para o Login
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
+
+    if (isForgotPassword) {
+      return (
+        <div className="min-h-[80vh] flex items-center justify-center bg-slate-950 p-4">
+          <Card className="w-full max-w-md bg-slate-900 border-slate-800 shadow-2xl relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-tr from-primary/10 via-transparent to-transparent pointer-events-none" />
+            <CardHeader className="text-center relative z-10">
+              <div className="h-12 w-12 rounded-xl bg-primary/20 flex items-center justify-center text-primary mx-auto mb-4 border border-primary/30">
+                <Clock className="h-6 w-6" />
+              </div>
+              <CardTitle className="text-2xl font-black font-headline text-white">Recuperação de Senha</CardTitle>
+              <CardDescription>Insira os e-mails associados para solicitar a redefinição.</CardDescription>
+            </CardHeader>
+            <CardContent className="relative z-10">
+              <form onSubmit={handlePasswordRecovery} className="space-y-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">E-mail Profissional (equipe)</label>
+                  <input
+                    type="email"
+                    value={recoveryInputEmail}
+                    onChange={(e) => setRecoveryInputEmail(e.target.value)}
+                    placeholder="nome@timevision.com.br"
+                    className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-sm focus:outline-none focus:border-primary text-white"
+                    required
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">E-mail de Recuperação Pessoal Cadastrado</label>
+                  <input
+                    type="email"
+                    value={recoveryInputGmail}
+                    onChange={(e) => setRecoveryInputGmail(e.target.value)}
+                    placeholder="seu.pessoal@gmail.com"
+                    className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-sm focus:outline-none focus:border-primary text-white"
+                    required
+                  />
+                </div>
+                <Button type="submit" className="w-full bg-primary text-primary-foreground hover:bg-primary/90 py-5 font-bold">
+                  Enviar E-mail de Recuperação
+                </Button>
+                <Button 
+                  type="button" 
+                  onClick={() => setIsForgotPassword(false)} 
+                  variant="ghost" 
+                  className="w-full text-slate-400 font-bold"
+                >
+                  Voltar para o Login
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-[80vh] flex items-center justify-center bg-slate-950 p-4">
         <Card className="w-full max-w-md bg-slate-900 border-slate-800 shadow-2xl relative overflow-hidden">
@@ -422,7 +839,16 @@ export default function AdminPage() {
                 />
               </div>
               <div className="flex flex-col gap-1.5 text-left">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Senha</label>
+                <div className="flex justify-between items-center">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Senha</label>
+                  <button 
+                    type="button" 
+                    onClick={() => setIsForgotPassword(true)}
+                    className="text-[10px] text-primary hover:underline font-bold"
+                  >
+                    Esqueceu a senha?
+                  </button>
+                </div>
                 <input
                   type="password"
                   value={loginPassword}
@@ -440,6 +866,7 @@ export default function AdminPage() {
                   type="button" 
                   onClick={() => {
                     setIsAuthenticated(true);
+                    setCurrentUser({ email: 'admin@timevision.com.br', nome: 'Desenvolvedor' });
                     if (typeof window !== 'undefined') {
                       localStorage.setItem('tv_admin_auth', 'true');
                     }
@@ -498,7 +925,7 @@ export default function AdminPage() {
           </div>
           <div>
             <p className="font-tagline text-brand-off-white tracking-widest text-xs uppercase">Painel PDV & Gestão</p>
-            <p className="font-body text-brand-off-white/40 text-[10px]">Timevision Ótica — Módulo Corporativo</p>
+            <p className="font-body text-brand-off-white/40 text-[10px]">Olá, <strong className="text-brand-gold">{currentUser?.nome || 'Consultor'}</strong></p>
           </div>
         </div>
         <div className="flex items-center gap-4">
@@ -522,6 +949,7 @@ export default function AdminPage() {
             { id: 'pdv', Icon: ShoppingCart, label: "Nova Venda" },
             { id: 'clientes', Icon: Users, label: "Clientes" },
             { id: 'estoque', Icon: Package, label: "Estoque" },
+            { id: 'eventos', Icon: Calendar, label: "Eventos" },
             { id: 'mkt', Icon: Sparkles, label: "Marketing" }
           ].map(({ id, Icon, label }) => (
             <button 
@@ -544,7 +972,42 @@ export default function AdminPage() {
         {/* TABA 1: DASHBOARD */}
         {activeTab === 'dash' && (
           <div className="space-y-6">
-            <h2 className="text-2xl font-headline font-bold">Visão Geral & Finanças</h2>
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <h2 className="text-2xl font-headline font-bold">Visão Geral & Finanças</h2>
+              <div className="flex flex-wrap gap-3">
+                {/* Vendedor Filter */}
+                <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs">
+                  <span className="text-slate-400">Consultor:</span>
+                  <select
+                    value={selectedVendedorId}
+                    onChange={(e) => setSelectedVendedorId(e.target.value)}
+                    className="bg-transparent border-none text-white focus:outline-none font-bold text-xs cursor-pointer"
+                  >
+                    <option value="todos" className="bg-slate-900">Todos</option>
+                    <option value="admin@timevision.com.br" className="bg-slate-900">Administrador</option>
+                    {equipe.map(member => (
+                      <option key={member.email} value={member.email} className="bg-slate-900">{member.nome}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Event Filter */}
+                <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs">
+                  <span className="text-slate-400">Origem (Evento):</span>
+                  <select
+                    value={selectedEventoId}
+                    onChange={(e) => setSelectedEventoId(e.target.value)}
+                    className="bg-transparent border-none text-white focus:outline-none font-bold text-xs cursor-pointer"
+                  >
+                    <option value="todos" className="bg-slate-900">Todos (Loja + Eventos)</option>
+                    <option value="loja" className="bg-slate-900">Apenas Loja Física</option>
+                    {eventos.map(ev => (
+                      <option key={ev.id} value={ev.id} className="bg-slate-900">{ev.nome}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
             
             {/* Financial Metrics Row */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -606,10 +1069,31 @@ export default function AdminPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {vendas.map((v) => (
+                      {vendas.filter(v => {
+                        if (selectedVendedorId !== 'todos' && v.vendedorId !== selectedVendedorId) return false;
+                        if (selectedEventoId !== 'todos') {
+                          if (selectedEventoId === 'loja' && v.eventoId) return false;
+                          if (selectedEventoId !== 'loja' && v.eventoId !== selectedEventoId) return false;
+                        }
+                        return true;
+                      }).map((v) => (
                         <tr key={v.id} className="border-b border-slate-800/40 hover:bg-slate-800/20 transition-colors">
                           <td className="py-3 px-4 font-bold text-primary">#{v.id}</td>
-                          <td className="py-3 px-4 font-semibold">{v.clienteNome}</td>
+                          <td className="py-3 px-4">
+                            <span className="font-semibold">{v.clienteNome}</span>
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {v.vendedorNome && (
+                                <span className="text-[8px] uppercase tracking-wider bg-slate-950 text-slate-400 border border-slate-800/60 px-1.5 py-0.5 rounded font-bold">
+                                  Ref: {v.vendedorNome}
+                                </span>
+                              )}
+                              {v.eventoId && (
+                                <span className="text-[8px] uppercase tracking-wider bg-primary/10 text-primary border border-primary/30 px-1.5 py-0.5 rounded font-bold">
+                                  Ev: {eventos.find(e => e.id === v.eventoId)?.nome || 'Promocional'}
+                                </span>
+                              )}
+                            </div>
+                          </td>
                           <td className="py-3 px-4 text-slate-400">
                             {v.produtos.map(p => p.nome).join(' + ')}
                           </td>
@@ -681,6 +1165,20 @@ export default function AdminPage() {
                         <option value="">Selecione um cliente...</option>
                         {clientes.map(c => (
                           <option key={c.id} value={c.id}>{c.nome} ({c.cpf})</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Vincular a Evento</label>
+                      <select
+                        value={pdvEventoId}
+                        onChange={(e) => setPdvEventoId(e.target.value)}
+                        className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-sm text-white focus:outline-none"
+                      >
+                        <option value="">Nenhum evento...</option>
+                        {eventos.filter(ev => ev.status === 'ativo').map(ev => (
+                          <option key={ev.id} value={ev.id}>{ev.nome}</option>
                         ))}
                       </select>
                     </div>
@@ -1115,6 +1613,239 @@ export default function AdminPage() {
             </div>
             
             {marketingMode === 'flyer' ? <MarketingFlyer /> : <MarketingBanner />}
+          </div>
+        )}
+
+        {/* TABA 6: EVENTOS */}
+        {activeTab === 'eventos' && (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <h2 className="text-2xl font-headline font-bold">Gestão de Eventos Promocionais</h2>
+                <p className="text-xs text-slate-400">Configure ações sociais, feiras e visualize leads inscritos.</p>
+              </div>
+              <Button 
+                onClick={() => {
+                  setEditingEvento(null);
+                  setIsEventModalOpen(true);
+                }} 
+                className="bg-primary text-primary-foreground hover:bg-primary/90 font-bold flex items-center gap-1.5"
+              >
+                <Plus className="h-4 w-4" /> Novo Evento
+              </Button>
+            </div>
+
+            {/* Event list */}
+            <div className="grid grid-cols-1 gap-6">
+              {eventos.map((ev) => {
+                const eventLeads = leads.filter(l => l.eventoId === ev.id);
+                const eventSales = vendas.filter(v => v.eventoId === ev.id && v.status !== 'orcamento');
+                const eventRevenue = eventSales.reduce((sum, current) => sum + current.valorTotal, 0);
+                
+                // Construct subscription landing page URL
+                const landingPageUrl = typeof window !== 'undefined' 
+                  ? `${window.location.origin}/inscricao-evento?evento=${ev.id}`
+                  : `/inscricao-evento?evento=${ev.id}`;
+
+                return (
+                  <Card key={ev.id} className={`bg-slate-900 border-slate-800 shadow-md ${ev.status === 'arquivado' ? 'opacity-65' : ''}`}>
+                    <CardHeader className="pb-3 border-b border-slate-800 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <CardTitle className="text-lg font-bold">{ev.nome}</CardTitle>
+                          <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                            ev.status === 'ativo' ? 'bg-green-950 text-green-400 border border-green-900/30' : 'bg-slate-950 text-slate-450 border border-slate-800'
+                          }`}>
+                            {ev.status === 'ativo' ? 'Ativo' : 'Arquivado'}
+                          </span>
+                        </div>
+                        <CardDescription className="text-xs text-slate-450 mt-1 flex flex-wrap gap-x-4 gap-y-1">
+                          <span>Data: {new Date(ev.data).toLocaleDateString('pt-BR')}</span>
+                          <span>Local: {ev.local}</span>
+                          {ev.criadoPor && <span>Criado por: {ev.criadoPor}</span>}
+                        </CardDescription>
+                      </div>
+                      
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          size="xs"
+                          variant="outline"
+                          onClick={() => {
+                            navigator.clipboard.writeText(landingPageUrl);
+                            toast({ title: 'Link Copiado!', description: 'Link de inscrição copiado para a área de transferência.' });
+                          }}
+                          className="border-slate-800 text-slate-350 hover:bg-slate-800 text-[10px] py-1 px-2.5 font-semibold"
+                        >
+                          Copiar Link de Inscrição
+                        </Button>
+                        <Button 
+                          size="xs"
+                          variant="outline"
+                          onClick={() => {
+                            setEditingEvento(ev);
+                            setIsEventModalOpen(true);
+                          }}
+                          className="border-slate-800 text-slate-350 hover:bg-slate-800 text-[10px] py-1 px-2.5 font-semibold"
+                        >
+                          Editar
+                        </Button>
+                        <Button 
+                          size="xs"
+                          variant="outline"
+                          onClick={() => handleArchiveEvento(ev)}
+                          className="border-slate-800 text-slate-350 hover:bg-slate-800 text-[10px] py-1 px-2.5 font-semibold"
+                        >
+                          {ev.status === 'ativo' ? 'Arquivar' : 'Reativar'}
+                        </Button>
+                        <Button 
+                          size="xs"
+                          variant="ghost"
+                          onClick={() => handleDeleteEvento(ev.id)}
+                          className="text-red-400 hover:bg-red-950/20 hover:text-red-300 text-[10px] py-1 px-2.5 font-semibold"
+                        >
+                          Excluir
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    
+                    <CardContent className="pt-4 space-y-4">
+                      {/* Metric cards for the event */}
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                        <div className="bg-slate-950 p-3 rounded-lg border border-slate-800/40">
+                          <span className="text-[10px] uppercase font-bold text-slate-450 block">Inscrições (Leads)</span>
+                          <span className="text-xl font-black text-white">{eventLeads.length}</span>
+                        </div>
+                        <div className="bg-slate-950 p-3 rounded-lg border border-slate-800/40">
+                          <span className="text-[10px] uppercase font-bold text-slate-450 block">Conversões em Venda</span>
+                          <span className="text-xl font-black text-white">{eventSales.length}</span>
+                        </div>
+                        <div className="bg-slate-950 p-3 rounded-lg border border-slate-800/40 col-span-2 sm:col-span-1">
+                          <span className="text-[10px] uppercase font-bold text-slate-450 block text-primary">Receita Gerada</span>
+                          <span className="text-xl font-black text-primary">R$ {eventRevenue.toFixed(2)}</span>
+                        </div>
+                      </div>
+
+                      {/* Lead Lists */}
+                      <div>
+                        <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                          <Users size={12} className="text-primary" /> Leads Cadastrados
+                        </h4>
+                        
+                        {eventLeads.length === 0 ? (
+                          <p className="text-xs text-slate-500 italic py-2">Nenhum lead se cadastrou neste evento ainda.</p>
+                        ) : (
+                          <div className="overflow-x-auto border border-slate-800 rounded-lg">
+                            <table className="w-full text-[11px] text-left border-collapse">
+                              <thead>
+                                <tr className="border-b border-slate-800 bg-slate-950/60 text-slate-400 font-bold uppercase text-[9px]">
+                                  <th className="py-2 px-3">Nome</th>
+                                  <th className="py-2 px-3">WhatsApp</th>
+                                  <th className="py-2 px-3">E-mail</th>
+                                  <th className="py-2 px-3">Necessidade</th>
+                                  <th className="py-2 px-3 text-right">Data Inscrição</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {eventLeads.map((lead, idx) => (
+                                  <tr key={idx} className="border-b border-slate-800/30 hover:bg-slate-850/30">
+                                    <td className="py-2 px-3 font-semibold text-slate-200">{lead.nome}</td>
+                                    <td className="py-2 px-3 text-slate-350">{lead.whatsapp}</td>
+                                    <td className="py-2 px-3 text-slate-350">{lead.email}</td>
+                                    <td className="py-2 px-3">
+                                      <span className="px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 text-[9px] font-bold uppercase">
+                                        {lead.exame}
+                                      </span>
+                                    </td>
+                                    <td className="py-2 px-3 text-right text-slate-500">
+                                      {lead.criadoEm ? new Date(lead.criadoEm).toLocaleDateString('pt-BR') : '-'}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+
+              {eventos.length === 0 && (
+                <div className="text-center py-12 bg-slate-900 border border-slate-800 rounded-xl">
+                  <Calendar className="h-12 w-12 text-slate-650 mx-auto mb-3" />
+                  <h3 className="text-sm font-bold text-slate-300">Nenhum Evento Configurado</h3>
+                  <p className="text-xs text-slate-500 mt-1">Crie um evento acima para começar a registrar leads.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Event Creation Modal */}
+            {isEventModalOpen && (
+              <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <Card className="w-full max-w-md bg-slate-900 border-slate-800 shadow-2xl">
+                  <CardHeader>
+                    <CardTitle className="text-xl font-bold">{editingEvento ? 'Editar Evento' : 'Configurar Novo Evento'}</CardTitle>
+                    <CardDescription>Insira as informações do evento para geração de landing page e banners.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <form onSubmit={handleSaveEvento} className="space-y-4">
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[10px] font-bold uppercase text-slate-400">Nome do Evento</label>
+                        <input
+                          type="text"
+                          name="nome"
+                          defaultValue={editingEvento?.nome || ''}
+                          placeholder="Ex: Ação Social Paróquia São Jorge"
+                          className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-primary"
+                          required
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[10px] font-bold uppercase text-slate-400">Data do Evento</label>
+                          <input
+                            type="date"
+                            name="data"
+                            defaultValue={editingEvento?.data || ''}
+                            className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-primary"
+                            required
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[10px] font-bold uppercase text-slate-400">Local</label>
+                          <input
+                            type="text"
+                            name="local"
+                            defaultValue={editingEvento?.local || ''}
+                            placeholder="Ex: Nilópolis, RJ"
+                            className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-primary"
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex gap-3 pt-4 border-t border-slate-800">
+                        <Button type="submit" className="flex-1 bg-primary text-primary-foreground font-bold">
+                          {editingEvento ? 'Salvar Alterações' : 'Criar Evento'}
+                        </Button>
+                        <Button 
+                          type="button" 
+                          variant="outline" 
+                          onClick={() => {
+                            setIsEventModalOpen(false);
+                            setEditingEvento(null);
+                          }}
+                          className="border-slate-800 text-slate-400"
+                        >
+                          Cancelar
+                        </Button>
+                      </div>
+                    </form>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
           </div>
         )}
 
