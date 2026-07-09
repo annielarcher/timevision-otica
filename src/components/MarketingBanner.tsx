@@ -286,19 +286,22 @@ export default function MarketingBanner() {
 
   // Re-draw preview whenever settings change
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (canvas) {
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        const originalWidth = 900;
-        const originalHeight = bannerSize === 'rollup' ? 2000 : 1350;
-        ctx.save();
-        ctx.scale(3, 3); // 3x scale for crisp social media images
-        drawBannerOnCanvas(ctx, originalWidth, originalHeight);
-        ctx.restore();
+    const draw = async () => {
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          const originalWidth = 900;
+          const originalHeight = bannerSize === 'rollup' ? 2000 : 1350;
+          ctx.save();
+          ctx.scale(3, 3); // 3x scale for crisp social media images
+          await drawBannerOnCanvas(ctx, originalWidth, originalHeight);
+          ctx.restore();
+        }
       }
-    }
+    };
+    draw();
   }, [
     title, tagline, promoText, details, uploadedImage, template,
     titleColor, taglineColor, promoBgColor, promoTextColor, detailsColor,

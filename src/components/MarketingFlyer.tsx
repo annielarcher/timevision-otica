@@ -267,17 +267,20 @@ export default function MarketingFlyer() {
 
   // Re-draw preview whenever settings change
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (canvas) {
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.save();
-        ctx.scale(3, 3); // 3x scale for crisp images
-        drawFlyerOnCanvas(ctx, 800, 1200);
-        ctx.restore();
+    const draw = async () => {
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.save();
+          ctx.scale(3, 3); // 3x scale for crisp images
+          await drawFlyerOnCanvas(ctx, 800, 1200);
+          ctx.restore();
+        }
       }
-    }
+    };
+    draw();
   }, [
     title, tagline, promoText, details, uploadedImage, template,
     titleColor, taglineColor, promoBgColor, promoTextColor, detailsColor,
