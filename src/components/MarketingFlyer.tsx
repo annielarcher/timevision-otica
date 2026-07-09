@@ -195,11 +195,13 @@ export default function MarketingFlyer() {
       };
 
       bgImg.onload = () => {
+        ctx.setTransform(3, 0, 0, 3, 0, 0); // 3x absolute scale
         ctx.drawImage(bgImg, 0, 0, width, height);
         drawContent();
       };
       
       bgImg.onerror = () => {
+        ctx.setTransform(3, 0, 0, 3, 0, 0); // 3x absolute scale
         // Fallback to background gradient drawing
         const gradient = ctx.createLinearGradient(0, 0, 0, height);
         const colors = TEMPLATE_PRESETS[template].bgGradient;
@@ -267,20 +269,14 @@ export default function MarketingFlyer() {
 
   // Re-draw preview whenever settings change
   useEffect(() => {
-    const draw = async () => {
-      const canvas = canvasRef.current;
-      if (canvas) {
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-          ctx.save();
-          ctx.scale(3, 3); // 3x scale for crisp images
-          await drawFlyerOnCanvas(ctx, 800, 1200);
-          ctx.restore();
-        }
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawFlyerOnCanvas(ctx, 800, 1200);
       }
-    };
-    draw();
+    }
   }, [
     title, tagline, promoText, details, uploadedImage, template,
     titleColor, taglineColor, promoBgColor, promoTextColor, detailsColor,

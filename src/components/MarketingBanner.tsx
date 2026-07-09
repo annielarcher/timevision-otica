@@ -115,6 +115,7 @@ export default function MarketingBanner() {
       return new Promise((resolve) => {
         const bgImg = new Image();
         bgImg.onload = () => {
+          ctx.setTransform(3, 0, 0, 3, 0, 0); // 3x absolute scale
           // Draw cover style to avoid stretching
           const scale = Math.max(width / bgImg.width, height / bgImg.height);
           const drawWidth = bgImg.width * scale;
@@ -125,6 +126,7 @@ export default function MarketingBanner() {
           resolve();
         };
         bgImg.onerror = () => {
+          ctx.setTransform(3, 0, 0, 3, 0, 0); // 3x absolute scale
           // Fallback to gradient if SVG fails to load
           const gradient = ctx.createLinearGradient(0, 0, 0, height);
           const colors = TEMPLATE_PRESETS[template].bgGradient;
@@ -286,22 +288,16 @@ export default function MarketingBanner() {
 
   // Re-draw preview whenever settings change
   useEffect(() => {
-    const draw = async () => {
-      const canvas = canvasRef.current;
-      if (canvas) {
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-          const originalWidth = 900;
-          const originalHeight = bannerSize === 'rollup' ? 2000 : 1350;
-          ctx.save();
-          ctx.scale(3, 3); // 3x scale for crisp social media images
-          await drawBannerOnCanvas(ctx, originalWidth, originalHeight);
-          ctx.restore();
-        }
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const originalWidth = 900;
+        const originalHeight = bannerSize === 'rollup' ? 2000 : 1350;
+        drawBannerOnCanvas(ctx, originalWidth, originalHeight);
       }
-    };
-    draw();
+    }
   }, [
     title, tagline, promoText, details, uploadedImage, template,
     titleColor, taglineColor, promoBgColor, promoTextColor, detailsColor,
