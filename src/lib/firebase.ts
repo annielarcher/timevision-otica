@@ -194,3 +194,21 @@ export async function getItemById<T extends { id: string }>(collectionName: stri
   }
   return null;
 }
+
+export async function saveLead(lead: { nome: string; whatsapp: string; email: string; exame: string; criadoEm: string }): Promise<void> {
+  if (isFirebaseConfigured && db) {
+    try {
+      await setDoc(doc(db, 'inscricoes', `lead-${Date.now()}`), lead);
+      return;
+    } catch (e) {
+      console.error('Firebase error saving lead, falling back to localStorage:', e);
+    }
+  }
+  
+  if (typeof window !== 'undefined') {
+    const local = localStorage.getItem('tv_inscricoes');
+    const items = local ? JSON.parse(local) : [];
+    items.push({ id: `lead-${Date.now()}`, ...lead });
+    localStorage.setItem('tv_inscricoes', JSON.stringify(items));
+  }
+}

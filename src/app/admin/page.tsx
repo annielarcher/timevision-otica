@@ -177,7 +177,7 @@ export default function AdminPage() {
     e.preventDefault();
     
     // 1. Fallback / Test bypass static credentials (local mode/demo)
-    if ((loginEmail === 'admin@timevision.com' || loginEmail === 'admin@timevision.com.br') && loginPassword === 'timevision123') {
+    if (!auth && (loginEmail === 'admin@timevision.com' || loginEmail === 'admin@timevision.com.br') && loginPassword === 'timevision123') {
       setIsAuthenticated(true);
       if (typeof window !== 'undefined') {
         localStorage.setItem('tv_admin_auth', 'true');
