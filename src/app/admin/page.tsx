@@ -17,6 +17,7 @@ import dynamic from 'next/dynamic';
 
 const WorkOrderGenerator = dynamic(() => import('@/components/WorkOrderGenerator'), { ssr: false });
 const MarketingFlyer = dynamic(() => import('@/components/MarketingFlyer'), { ssr: false });
+const MarketingBanner = dynamic(() => import('@/components/MarketingBanner'), { ssr: false });
 const GOLD = "#B5996A";
 
 export default function AdminPage() {
@@ -28,6 +29,7 @@ export default function AdminPage() {
   
   // Navigation Tabs
   const [activeTab, setActiveTab] = useState<'dash' | 'pdv' | 'clientes' | 'estoque' | 'mkt'>('dash');
+  const [marketingMode, setMarketingMode] = useState<'flyer' | 'banner'>('flyer');
 
   // Database states
   const [clientes, setClientes] = useState<Cliente[]>([]);
@@ -1090,8 +1092,29 @@ export default function AdminPage() {
         {/* TABA 5: MARKETING */}
         {activeTab === 'mkt' && (
           <div className="space-y-6">
-            <h2 className="text-2xl font-headline font-bold">Gerador de Material de Marketing</h2>
-            <MarketingFlyer />
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <h2 className="text-2xl font-headline font-bold">Gerador de Material de Marketing</h2>
+              <div className="flex bg-slate-900 border border-slate-800 rounded-lg p-1">
+                <button
+                  onClick={() => setMarketingMode('flyer')}
+                  className={`px-4 py-2 text-xs font-bold rounded-md transition-colors ${
+                    marketingMode === 'flyer' ? 'bg-primary text-primary-foreground' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Panfleto Digital
+                </button>
+                <button
+                  onClick={() => setMarketingMode('banner')}
+                  className={`px-4 py-2 text-xs font-bold rounded-md transition-colors ${
+                    marketingMode === 'banner' ? 'bg-primary text-primary-foreground' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Banner para Stand
+                </button>
+              </div>
+            </div>
+            
+            {marketingMode === 'flyer' ? <MarketingFlyer /> : <MarketingBanner />}
           </div>
         )}
 

@@ -1,11 +1,22 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Download, Sparkles, Image as ImageIcon, Type, Calendar, HelpCircle, RefreshCw } from 'lucide-react';
+import { Download, Sparkles, Image as ImageIcon, Type, Calendar, HelpCircle, RefreshCw, ImportIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
+import { Phone } from 'lucide-react';
 
-type PresetTemplate = 'b2b' | 'discount' | 'custom';
+type PresetTemplate = 'igreja' | 'b2b' | 'discount' | 'custom';
+
+const BRAND_COLORS = [
+  { name: 'Branco', hex: '#ffffff' },
+  { name: 'Gelo', hex: '#F9F7F8' },
+  { name: 'Dourado', hex: '#B5996A' },
+  { name: 'Grafite', hex: '#3D3D3D' },
+  { name: 'Cinza Médio', hex: '#585858' },
+  { name: 'Vinho', hex: '#900D13' },
+  { name: 'Azul Petróleo', hex: '#004168' }
+];
 
 interface PresetConfig {
   title: string;
@@ -16,6 +27,13 @@ interface PresetConfig {
 }
 
 const TEMPLATE_PRESETS: Record<PresetTemplate, PresetConfig> = {
+  igreja: {
+    title: 'Veja o que Deus preparou para você!',
+    tagline: 'Visite nosso Stand no auditório',
+    promoText: 'Atendimento VIP · Condições Exclusivas',
+    details: 'A Timevision Ótica apresenta uma seleção especial de armações e condições exclusivas para os membros desta instituição.',
+    bgGradient: ['#3D3D3D', '#1F1F1F'], // Brand Graphite/Charcoal Gradient
+  },
   b2b: {
     title: 'Feira de Saúde Visual',
     tagline: 'Exame de Vista Gratuito no Local',
@@ -41,13 +59,28 @@ const TEMPLATE_PRESETS: Record<PresetTemplate, PresetConfig> = {
 
 export default function MarketingFlyer() {
   const { toast } = useToast();
-  const [template, setTemplate] = useState<PresetTemplate>('b2b');
-  const [title, setTitle] = useState(TEMPLATE_PRESETS.b2b.title);
-  const [tagline, setTagline] = useState(TEMPLATE_PRESETS.b2b.tagline);
-  const [promoText, setPromoText] = useState(TEMPLATE_PRESETS.b2b.promoText);
-  const [details, setDetails] = useState(TEMPLATE_PRESETS.b2b.details);
+  const [template, setTemplate] = useState<PresetTemplate>('igreja');
+  const [title, setTitle] = useState(TEMPLATE_PRESETS.igreja.title);
+  const [tagline, setTagline] = useState(TEMPLATE_PRESETS.igreja.tagline);
+  const [promoText, setPromoText] = useState(TEMPLATE_PRESETS.igreja.promoText);
+  const [details, setDetails] = useState(TEMPLATE_PRESETS.igreja.details);
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   
+  // Custom Styling and Position States
+  const [titleColor, setTitleColor] = useState('#900D13');
+  const [taglineColor, setTaglineColor] = useState('#900D13');
+  const [promoBgColor, setPromoBgColor] = useState('#B5996A');
+  const [promoTextColor, setPromoTextColor] = useState('#F9F7F8');
+  const [detailsColor, setDetailsColor] = useState('#585858');
+
+  const [titleY, setTitleY] = useState(210);
+  const [taglineY, setTaglineY] = useState(270);
+  const [imageY, setImageY] = useState(540);
+  const [imageSize, setImageSize] = useState(200);
+  const [promoY, setPromoY] = useState(780);
+  const [detailsY, setDetailsY] = useState(930);
+  
+  const [isExporting, setIsExporting] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // Sync inputs when template preset changes
@@ -74,133 +107,136 @@ export default function MarketingFlyer() {
 
   const drawFlyerOnCanvas = (ctx: CanvasRenderingContext2D, width: number, height: number): Promise<void> => {
     return new Promise((resolve) => {
-      // 1. Draw Background Gradient
-      const gradient = ctx.createLinearGradient(0, 0, 0, height);
-      const colors = TEMPLATE_PRESETS[template].bgGradient;
-      gradient.addColorStop(0, colors[0]);
-      gradient.addColorStop(1, colors[1]);
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, width, height);
+      const bgImg = new Image();
+      
+      const drawContent = () => {
+        // Helper: draw title and tagline on top of everything
+        const drawTitles = () => {
+          ctx.textAlign = 'center';
+          // 3. Draw Title
+          ctx.fillStyle = titleColor;
+          let titleFontSize = 64;
+          ctx.font = `bold ${titleFontSize}px Lora`;
+          while (ctx.measureText(title.toUpperCase()).width > width - 80 && titleFontSize > 30) {
+            titleFontSize -= 2;
+            ctx.font = `bold ${titleFontSize}px Lora`;
+          }
+          ctx.fillText(title.toUpperCase(), width / 2, titleY);
 
-      // Decorative vector rings
-      ctx.strokeStyle = 'rgba(255, 215, 0, 0.08)';
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.arc(width / 2, height / 2, 350, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(width / 2, height / 2, 280, 0, Math.PI * 2);
-      ctx.stroke();
-
-      // 2. Draw Store Header
-      ctx.fillStyle = '#e2e8f0';
-      ctx.font = 'bold 36px Helvetica';
-      ctx.textAlign = 'center';
-      ctx.fillText('TIMEVISION ÓTICA', width / 2, 90);
-
-      // Small logo/divider line
-      ctx.strokeStyle = '#e0a020'; // Gold accent
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(width / 2 - 80, 115);
-      ctx.lineTo(width / 2 + 80, 115);
-      ctx.stroke();
-
-      // 3. Draw Title (Vibrant/Large)
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 64px Helvetica';
-      ctx.fillText(title.toUpperCase(), width / 2, 210);
-
-      // 4. Draw Tagline
-      ctx.fillStyle = '#f5c842'; // Light Gold
-      ctx.font = 'bold 32px Helvetica';
-      ctx.fillText(tagline, width / 2, 270);
-
-      // 5. Draw Frame/Product Image if uploaded
-      if (uploadedImage) {
-        const img = new Image();
-        img.onload = () => {
-          // Draw circle crop frame for product
-          ctx.save();
-          ctx.beginPath();
-          ctx.arc(width / 2, 540, 200, 0, Math.PI * 2);
-          ctx.clip();
-          
-          // Draw the image scaled to fit
-          const scale = Math.max(400 / img.width, 400 / img.height);
-          const x = width / 2 - (img.width * scale) / 2;
-          const y = 540 - (img.height * scale) / 2;
-          ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
-          
-          ctx.restore();
-
-          // Outer Gold ring for cropped product image
-          ctx.strokeStyle = '#e0a020';
-          ctx.lineWidth = 8;
-          ctx.beginPath();
-          ctx.arc(width / 2, 540, 200, 0, Math.PI * 2);
-          ctx.stroke();
-
-          // Proceed to text rendering below
-          drawTextFooter(ctx, width, height);
-          resolve();
+          // 4. Draw Tagline
+          ctx.fillStyle = taglineColor;
+          let taglineFontSize = 32;
+          ctx.font = `bold ${taglineFontSize}px   Lora`;
+          while (ctx.measureText(tagline).width > width - 80 && taglineFontSize > 18) {
+            taglineFontSize -= 2;
+            ctx.font = `bold ${taglineFontSize}px Lora`;
+          }
+          ctx.fillText(tagline, width / 2, taglineY);
         };
-        img.src = uploadedImage;
-      } else {
-        // Draw placeholder illustration of glasses if no photo is uploaded
-        ctx.strokeStyle = '#e0a020';
-        ctx.lineWidth = 10;
-        
-        // Left glass frame
-        ctx.beginPath();
-        ctx.arc(width / 2 - 120, 520, 90, 0, Math.PI * 2);
-        ctx.stroke();
-        
-        // Right glass frame
-        ctx.beginPath();
-        ctx.arc(width / 2 + 120, 520, 90, 0, Math.PI * 2);
-        ctx.stroke();
 
-        // Bridge line
-        ctx.beginPath();
-        ctx.arc(width / 2, 510, 40, Math.PI, 0);
-        ctx.stroke();
+        // 5. Draw Frame/Product Image if uploaded
+        if (uploadedImage) {
+          const img = new Image();
+          img.onload = () => {
+            // Draw circle crop frame for product
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(width / 2, imageY, imageSize, 0, Math.PI * 2);
+            ctx.clip();
+            const scale = Math.max((imageSize * 2) / img.width, (imageSize * 2) / img.height);
+            const x = width / 2 - (img.width * scale) / 2;
+            const y = imageY - (img.height * scale) / 2;
+            ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
+            ctx.restore();
+            // Outer Gold ring for cropped product image
+            ctx.strokeStyle = '#e0a020';
+            ctx.lineWidth = 8;
+            ctx.beginPath();
+            ctx.arc(width / 2, imageY, imageSize, 0, Math.PI * 2);
+            ctx.stroke();
+            // Draw text on top of image
+            drawTitles();
+            drawTextFooter(ctx, width, height);
+            resolve();
+          };
+          img.src = uploadedImage;
+        } else {
+          // Load default model image as placeholder
+          const defaultImg = new Image();
+          defaultImg.onload = () => {
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(width / 2, imageY, imageSize, 0, Math.PI * 2);
+            ctx.clip();
+            const scale = Math.max((imageSize * 2) / defaultImg.width, (imageSize * 2) / defaultImg.height);
+            const dx = width / 2 - (defaultImg.width * scale) / 2;
+            const dy = imageY - (defaultImg.height * scale) / 2;
+            ctx.drawImage(defaultImg, dx, dy, defaultImg.width * scale, defaultImg.height * scale);
+            ctx.restore();
+            // Outer Gold ring
+            ctx.strokeStyle = '#B5996A';
+            ctx.lineWidth = 8;
+            ctx.beginPath();
+            ctx.arc(width / 2, imageY, imageSize, 0, Math.PI * 2);
+            ctx.stroke();
+            // Draw text on top of image
+            drawTitles();
+            drawTextFooter(ctx, width, height);
+            resolve();
+          };
+          defaultImg.onerror = () => {
+            // Fallback: no image, just draw text
+            drawTitles();
+            drawTextFooter(ctx, width, height);
+            resolve();
+          };
+          defaultImg.src = '/images/flyer-model-default.png';
+        }
+      };
 
-        // Temples
-        ctx.beginPath();
-        ctx.moveTo(width / 2 - 210, 510);
-        ctx.lineTo(width / 2 - 260, 480);
-        ctx.moveTo(width / 2 + 210, 510);
-        ctx.lineTo(width / 2 + 260, 480);
-        ctx.stroke();
-
-        ctx.fillStyle = '#f5c842';
-        ctx.font = 'italic 24px Helvetica';
-        ctx.fillText('[ Insira a Foto do Óculos no Painel Lateral ]', width / 2, 660);
-
-        // Proceed to text rendering below
-        drawTextFooter(ctx, width, height);
-        resolve();
-      }
+      bgImg.onload = () => {
+        ctx.drawImage(bgImg, 0, 0, width, height);
+        drawContent();
+      };
+      
+      bgImg.onerror = () => {
+        // Fallback to background gradient drawing
+        const gradient = ctx.createLinearGradient(0, 0, 0, height);
+        const colors = TEMPLATE_PRESETS[template].bgGradient;
+        gradient.addColorStop(0, colors[0]);
+        gradient.addColorStop(1, colors[1]);
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, width, height);
+        drawContent();
+      };
+      
+      bgImg.src = '/templates/template-feed.svg';
     });
   };
 
   const drawTextFooter = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
     // 6. Draw Promotional Offer Text
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 44px Helvetica';
     ctx.textAlign = 'center';
     
     // Draw rounded background block for promo text
-    ctx.fillStyle = '#e0a020';
-    ctx.fillRect(80, 780, width - 160, 90);
+    ctx.fillStyle = promoBgColor;
+    ctx.fillRect(80, promoY, width - 160, 90);
     
-    ctx.fillStyle = '#0f172a'; // Navy text
-    ctx.fillText(promoText.toUpperCase(), width / 2, 842);
+    let promoFontSize = 44;
+    ctx.font = `bold ${promoFontSize}px Lora`;
+    const maxPromoWidth = width - 220;
+    while (ctx.measureText(promoText.toUpperCase()).width > maxPromoWidth && promoFontSize > 20) {
+      promoFontSize -= 2;
+      ctx.font = `bold ${promoFontSize}px Lora`;
+    }
+    
+    ctx.fillStyle = promoTextColor; // Custom text color
+    const textY = promoY + 45 + (promoFontSize * 0.35);
+    ctx.fillText(promoText.toUpperCase(), width / 2, textY);
 
     // 7. Draw Campaign Details
-    ctx.fillStyle = '#e2e8f0';
-    ctx.font = 'normal 26px Helvetica';
+    ctx.fillStyle = detailsColor;
+    ctx.font = 'normal 26px Lora';
     const wrappedLines = [];
     const words = details.split(' ');
     let currentLine = '';
@@ -217,16 +253,16 @@ export default function MarketingFlyer() {
     }
     wrappedLines.push(currentLine);
 
-    let detailsY = 930;
+    let currentDetailsY = detailsY;
     for (let line of wrappedLines) {
-      ctx.fillText(line.trim(), width / 2, detailsY);
-      detailsY += 36;
+      ctx.fillText(line.trim(), width / 2, currentDetailsY);
+      currentDetailsY += 36;
     }
 
     // 8. Footer CTA
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = 'bold 22px Helvetica';
-    ctx.fillText('Solicite seu atendimento: (21) 99999-9999', width / 2, height - 60);
+    ctx.fillStyle = '#585858';
+    ctx.font = 'bold 22px Lora';
+    ctx.fillText('☎ (21) 97769-6374' + '  \n  ' + 'www.timevision.com.br', width / 2, height - 60);
   };
 
   // Re-draw preview whenever settings change
@@ -239,7 +275,11 @@ export default function MarketingFlyer() {
         drawFlyerOnCanvas(ctx, canvas.width, canvas.height);
       }
     }
-  }, [title, tagline, promoText, details, uploadedImage, template]);
+  }, [
+    title, tagline, promoText, details, uploadedImage, template,
+    titleColor, taglineColor, promoBgColor, promoTextColor, detailsColor,
+    titleY, taglineY, imageY, imageSize, promoY, detailsY
+  ]);
 
   const handleDownload = () => {
     const canvas = canvasRef.current;
@@ -254,6 +294,39 @@ export default function MarketingFlyer() {
         title: 'Sucesso',
         description: 'Panfleto promocional baixado como imagem PNG!',
       });
+    }
+  };
+
+  const handleDownloadPDF = async () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    setIsExporting(true);
+    try {
+      const { jsPDF } = await import('jspdf');
+      // A6 in mm: 105 x 148
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: [105, 148],
+      });
+      // Convert canvas to JPEG for smaller PDF size
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      // Fill the full A6 page
+      doc.addImage(imgData, 'JPEG', 0, 0, 105, 148);
+      doc.save(`flyer-timevision-${template}-grafica.pdf`);
+      toast({
+        title: 'PDF Gerado',
+        description: 'Arquivo A6 para gráfica baixado com sucesso!',
+      });
+    } catch (error) {
+      console.error('Erro ao gerar PDF:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Erro',
+        description: 'Não foi possível gerar o PDF. Tente novamente.',
+      });
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -278,7 +351,17 @@ export default function MarketingFlyer() {
         {/* Template Select */}
         <div className="flex flex-col gap-1.5">
           <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Modelo de Campanha</span>
-          <div className="grid grid-cols-3 gap-2 mt-1">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-1">
+            <button
+              onClick={() => setTemplate('igreja')}
+              className={`py-2 px-3 text-xs font-bold rounded-lg border transition-all ${
+                template === 'igreja' 
+                  ? 'bg-primary border-primary text-primary-foreground shadow' 
+                  : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-800'
+              }`}
+            >
+              Ação igrejas
+            </button>
             <button
               onClick={() => setTemplate('b2b')}
               className={`py-2 px-3 text-xs font-bold rounded-lg border transition-all ${
@@ -307,7 +390,7 @@ export default function MarketingFlyer() {
                   : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-800'
               }`}
             >
-              Customizado / Outro
+              Customizado
             </button>
           </div>
         </div>
@@ -389,21 +472,224 @@ export default function MarketingFlyer() {
           />
         </div>
 
+        {/* Color Customization */}
+        <div className="border-t border-slate-800 pt-3 mt-1 space-y-2">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Cores do Texto e Banner (Paleta da Marca)</span>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[9px] uppercase font-bold text-slate-400">Cor do Título</label>
+              <div className="flex flex-wrap gap-1 mt-0.5">
+                {BRAND_COLORS.map((c) => (
+                  <button
+                    key={c.hex}
+                    type="button"
+                    onClick={() => setTitleColor(c.hex)}
+                    className={`w-6 h-6 rounded-full border transition-all ${
+                      titleColor.toLowerCase() === c.hex.toLowerCase()
+                        ? 'border-white scale-110 shadow-md ring-2 ring-primary/45'
+                        : 'border-slate-800 hover:scale-105'
+                    }`}
+                    style={{ backgroundColor: c.hex }}
+                    title={c.name}
+                  />
+                ))}
+              </div>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[9px] uppercase font-bold text-slate-400">Cor do Subtítulo</label>
+              <div className="flex flex-wrap gap-1 mt-0.5">
+                {BRAND_COLORS.map((c) => (
+                  <button
+                    key={c.hex}
+                    type="button"
+                    onClick={() => setTaglineColor(c.hex)}
+                    className={`w-6 h-6 rounded-full border transition-all ${
+                      taglineColor.toLowerCase() === c.hex.toLowerCase()
+                        ? 'border-white scale-110 shadow-md ring-2 ring-primary/45'
+                        : 'border-slate-800 hover:scale-105'
+                    }`}
+                    style={{ backgroundColor: c.hex }}
+                    title={c.name}
+                  />
+                ))}
+              </div>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[9px] uppercase font-bold text-slate-400">Fundo Destaque</label>
+              <div className="flex flex-wrap gap-1 mt-0.5">
+                {BRAND_COLORS.map((c) => (
+                  <button
+                    key={c.hex}
+                    type="button"
+                    onClick={() => setPromoBgColor(c.hex)}
+                    className={`w-6 h-6 rounded-full border transition-all ${
+                      promoBgColor.toLowerCase() === c.hex.toLowerCase()
+                        ? 'border-white scale-110 shadow-md ring-2 ring-primary/45'
+                        : 'border-slate-800 hover:scale-105'
+                    }`}
+                    style={{ backgroundColor: c.hex }}
+                    title={c.name}
+                  />
+                ))}
+              </div>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[9px] uppercase font-bold text-slate-400">Texto Destaque</label>
+              <div className="flex flex-wrap gap-1 mt-0.5">
+                {BRAND_COLORS.map((c) => (
+                  <button
+                    key={c.hex}
+                    type="button"
+                    onClick={() => setPromoTextColor(c.hex)}
+                    className={`w-6 h-6 rounded-full border transition-all ${
+                      promoTextColor.toLowerCase() === c.hex.toLowerCase()
+                        ? 'border-white scale-110 shadow-md ring-2 ring-primary/45'
+                        : 'border-slate-800 hover:scale-105'
+                    }`}
+                    style={{ backgroundColor: c.hex }}
+                    title={c.name}
+                  />
+                ))}
+              </div>
+            </div>
+            <div className="flex flex-col gap-1.5 col-span-1 md:col-span-2">
+              <label className="text-[9px] uppercase font-bold text-slate-400">Cor dos Detalhes</label>
+              <div className="flex flex-wrap gap-1 mt-0.5">
+                {BRAND_COLORS.map((c) => (
+                  <button
+                    key={c.hex}
+                    type="button"
+                    onClick={() => setDetailsColor(c.hex)}
+                    className={`w-6 h-6 rounded-full border transition-all ${
+                      detailsColor.toLowerCase() === c.hex.toLowerCase()
+                        ? 'border-white scale-110 shadow-md ring-2 ring-primary/45'
+                        : 'border-slate-800 hover:scale-105'
+                    }`}
+                    style={{ backgroundColor: c.hex }}
+                    title={c.name}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Position Sliders */}
+        <div className="border-t border-slate-800 pt-3 mt-1 space-y-2">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Ajuste de Posições (Vertical)</span>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1">
+              <div className="flex justify-between text-[9px] font-bold text-slate-400">
+                <span>POSIÇÃO TÍTULO</span>
+                <span>{titleY}px</span>
+              </div>
+              <input
+                type="range"
+                min="100"
+                max="400"
+                value={titleY}
+                onChange={(e) => setTitleY(Number(e.target.value))}
+                className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-primary"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <div className="flex justify-between text-[9px] font-bold text-slate-400">
+                <span>POSIÇÃO SUBTÍTULO</span>
+                <span>{taglineY}px</span>
+              </div>
+              <input
+                type="range"
+                min="150"
+                max="500"
+                value={taglineY}
+                onChange={(e) => setTaglineY(Number(e.target.value))}
+                className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-primary"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <div className="flex justify-between text-[9px] font-bold text-slate-400">
+                <span>POSIÇÃO ÓCULOS</span>
+                <span>{imageY}px</span>
+              </div>
+              <input
+                type="range"
+                min="300"
+                max="800"
+                value={imageY}
+                onChange={(e) => setImageY(Number(e.target.value))}
+                className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-primary"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <div className="flex justify-between text-[9px] font-bold text-slate-400">
+                <span>TAMANHO ÓCULOS</span>
+                <span>{imageSize}px</span>
+              </div>
+              <input
+                type="range"
+                min="100"
+                max="300"
+                value={imageSize}
+                onChange={(e) => setImageSize(Number(e.target.value))}
+                className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-primary"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <div className="flex justify-between text-[9px] font-bold text-slate-400">
+                <span>POSIÇÃO DESTAQUE</span>
+                <span>{promoY}px</span>
+              </div>
+              <input
+                type="range"
+                min="500"
+                max="1000"
+                value={promoY}
+                onChange={(e) => setPromoY(Number(e.target.value))}
+                className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-primary"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <div className="flex justify-between text-[9px] font-bold text-slate-400">
+                <span>POSIÇÃO DETALHES</span>
+                <span>{detailsY}px</span>
+              </div>
+              <input
+                type="range"
+                min="600"
+                max="1150"
+                value={detailsY}
+                onChange={(e) => setDetailsY(Number(e.target.value))}
+                className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-primary"
+              />
+            </div>
+          </div>
+        </div>
+
         {/* Buttons */}
-        <div className="flex gap-3 pt-3 border-t border-slate-800">
-          <Button
-            onClick={handleDownload}
-            className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 text-sm font-bold gap-2 py-5"
-          >
-            <Download className="h-4.5 w-4.5" />
-            Baixar Panfleto PNG
-          </Button>
+        <div className="flex flex-col gap-2 pt-3 border-t border-slate-800">
+          <div className="flex gap-3">
+            <Button
+              onClick={handleDownload}
+              className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 text-sm font-bold gap-2 py-5"
+            >
+              <Download className="h-4.5 w-4.5" />
+              Baixar PNG
+            </Button>
+            <Button
+              onClick={handleDownloadPDF}
+              disabled={isExporting}
+              className="flex-1 bg-[#004168] text-white hover:bg-[#004168]/90 text-sm font-bold gap-2 py-5"
+            >
+              <Download className="h-4.5 w-4.5" />
+              {isExporting ? 'Gerando PDF...' : 'Baixar PDF (A6 Gráfica)'}
+            </Button>
+          </div>
           <Button
             variant="outline"
             onClick={resetFields}
-            className="px-4 py-5 border-slate-800 text-slate-400 hover:text-white"
+            className="w-full py-3 border-slate-800 text-slate-400 hover:text-white text-xs"
           >
-            Limpar
+            Limpar Campos
           </Button>
         </div>
       </div>
