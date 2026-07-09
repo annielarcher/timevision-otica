@@ -115,6 +115,7 @@ export default function MarketingBanner() {
       return new Promise((resolve) => {
         const bgImg = new Image();
         bgImg.onload = () => {
+          ctx.setTransform(3, 0, 0, 3, 0, 0); // 3x absolute scale
           // Draw cover style to avoid stretching
           const scale = Math.max(width / bgImg.width, height / bgImg.height);
           const drawWidth = bgImg.width * scale;
@@ -125,6 +126,7 @@ export default function MarketingBanner() {
           resolve();
         };
         bgImg.onerror = () => {
+          ctx.setTransform(3, 0, 0, 3, 0, 0); // 3x absolute scale
           // Fallback to gradient if SVG fails to load
           const gradient = ctx.createLinearGradient(0, 0, 0, height);
           const colors = TEMPLATE_PRESETS[template].bgGradient;
@@ -190,7 +192,7 @@ export default function MarketingBanner() {
           ctx.stroke();
           resolve();
         };
-        img.onerror = resolve;
+        img.onerror = () => resolve();
         img.src = uploadedImage || '/images/flyer-model-default.png';
       });
     };
@@ -215,7 +217,7 @@ export default function MarketingBanner() {
 
       // Draw Campaign Details
       ctx.fillStyle = detailsColor;
-      ctx.font = 'normal 32px Lora';
+      ctx.font = 'bold 32px Lora';
       const wrappedLines = [];
       const words = details.split(' ');
       let currentLine = '';
@@ -291,7 +293,9 @@ export default function MarketingBanner() {
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        drawBannerOnCanvas(ctx, canvas.width, canvas.height);
+        const originalWidth = 900;
+        const originalHeight = bannerSize === 'rollup' ? 2000 : 1350;
+        drawBannerOnCanvas(ctx, originalWidth, originalHeight);
       }
     }
   }, [
@@ -762,8 +766,8 @@ export default function MarketingBanner() {
         <div className="w-[300px] h-[450px] relative overflow-hidden rounded-lg shadow-2xl border border-slate-800 bg-slate-900 flex items-center justify-center">
           <canvas
             ref={canvasRef}
-            width={900}
-            height={bannerSize === 'rollup' ? 2000 : 1350}
+            width={2700}
+            height={bannerSize === 'rollup' ? 6000 : 4050}
             className="w-full h-full object-contain"
           />
         </div>

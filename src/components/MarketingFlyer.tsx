@@ -195,11 +195,13 @@ export default function MarketingFlyer() {
       };
 
       bgImg.onload = () => {
+        ctx.setTransform(3, 0, 0, 3, 0, 0); // 3x absolute scale
         ctx.drawImage(bgImg, 0, 0, width, height);
         drawContent();
       };
       
       bgImg.onerror = () => {
+        ctx.setTransform(3, 0, 0, 3, 0, 0); // 3x absolute scale
         // Fallback to background gradient drawing
         const gradient = ctx.createLinearGradient(0, 0, 0, height);
         const colors = TEMPLATE_PRESETS[template].bgGradient;
@@ -236,7 +238,7 @@ export default function MarketingFlyer() {
 
     // 7. Draw Campaign Details
     ctx.fillStyle = detailsColor;
-    ctx.font = 'normal 26px Lora';
+    ctx.font = 'bold 26px Lora';
     const wrappedLines = [];
     const words = details.split(' ');
     let currentLine = '';
@@ -272,7 +274,7 @@ export default function MarketingFlyer() {
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        drawFlyerOnCanvas(ctx, canvas.width, canvas.height);
+        drawFlyerOnCanvas(ctx, 800, 1200);
       }
     }
   }, [
@@ -700,8 +702,8 @@ export default function MarketingFlyer() {
         <div className="w-[300px] h-[450px] relative overflow-hidden rounded-lg shadow-2xl border border-slate-800 bg-slate-900 flex items-center justify-center">
           <canvas
             ref={canvasRef}
-            width={800}
-            height={1200}
+            width={2400}
+            height={3600}
             className="w-full h-full object-contain"
           />
         </div>
