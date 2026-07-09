@@ -236,7 +236,7 @@ export default function MarketingFlyer() {
 
     // 7. Draw Campaign Details
     ctx.fillStyle = detailsColor;
-    ctx.font = 'normal 26px Lora';
+    ctx.font = 'bold 26px Lora';
     const wrappedLines = [];
     const words = details.split(' ');
     let currentLine = '';

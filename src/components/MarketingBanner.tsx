@@ -215,7 +215,7 @@ export default function MarketingBanner() {
 
       // Draw Campaign Details
       ctx.fillStyle = detailsColor;
-      ctx.font = 'normal 32px Lora';
+      ctx.font = 'bold 32px Lora';
       const wrappedLines = [];
       const words = details.split(' ');
       let currentLine = '';
