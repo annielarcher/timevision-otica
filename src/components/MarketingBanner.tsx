@@ -291,7 +291,12 @@ export default function MarketingBanner() {
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        drawBannerOnCanvas(ctx, canvas.width, canvas.height);
+        const originalWidth = 900;
+        const originalHeight = bannerSize === 'rollup' ? 2000 : 1350;
+        ctx.save();
+        ctx.scale(3, 3); // 3x scale for crisp social media images
+        drawBannerOnCanvas(ctx, originalWidth, originalHeight);
+        ctx.restore();
       }
     }
   }, [
@@ -762,8 +767,8 @@ export default function MarketingBanner() {
         <div className="w-[300px] h-[450px] relative overflow-hidden rounded-lg shadow-2xl border border-slate-800 bg-slate-900 flex items-center justify-center">
           <canvas
             ref={canvasRef}
-            width={900}
-            height={bannerSize === 'rollup' ? 2000 : 1350}
+            width={2700}
+            height={bannerSize === 'rollup' ? 6000 : 4050}
             className="w-full h-full object-contain"
           />
         </div>

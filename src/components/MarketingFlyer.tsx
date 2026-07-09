@@ -272,7 +272,10 @@ export default function MarketingFlyer() {
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        drawFlyerOnCanvas(ctx, canvas.width, canvas.height);
+        ctx.save();
+        ctx.scale(3, 3); // 3x scale for crisp images
+        drawFlyerOnCanvas(ctx, 800, 1200);
+        ctx.restore();
       }
     }
   }, [
@@ -700,8 +703,8 @@ export default function MarketingFlyer() {
         <div className="w-[300px] h-[450px] relative overflow-hidden rounded-lg shadow-2xl border border-slate-800 bg-slate-900 flex items-center justify-center">
           <canvas
             ref={canvasRef}
-            width={800}
-            height={1200}
+            width={2400}
+            height={3600}
             className="w-full h-full object-contain"
           />
         </div>
