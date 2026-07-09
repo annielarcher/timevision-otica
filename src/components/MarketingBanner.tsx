@@ -190,7 +190,7 @@ export default function MarketingBanner() {
           ctx.stroke();
           resolve();
         };
-        img.onerror = resolve;
+        img.onerror = () => resolve();
         img.src = uploadedImage || '/images/flyer-model-default.png';
       });
     };
