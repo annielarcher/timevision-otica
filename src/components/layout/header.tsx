@@ -29,8 +29,7 @@ export function Header() {
     <header className="fixed top-0 left-0 right-0 z-50 transition-all duration-300" style={{ background: GRAPHITE, borderBottom: `1px solid ${GOLD}35` }}>
       <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
         <Link href="/" className="flex items-center space-x-3 transition-opacity hover:opacity-80">
-          <img src="/logos/icone/1.svg" className="h-8 w-8 brightness-200" alt="Logo Timevision" />
-          <img src="/logos/logo-light.svg" className="h-10 w-auto" alt="Timevision Ótica" />
+          <img src="/logos/logo-1.svg" className="h-12 w-auto brightness-0 invert" alt="Timevision Ótica" />
         </Link>
 
         <nav className="hidden md:flex items-center gap-8">

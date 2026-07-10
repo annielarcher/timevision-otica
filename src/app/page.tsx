@@ -124,8 +124,7 @@ export default function HomePage() {
               />
             </div>
             <div className="absolute bottom-6 left-6 p-4 bg-brand-off-white shadow-lg flex items-center space-x-2">
-              <img src="/logos/icone/1.svg" className="h-6 w-6 opacity-90" alt="Logo Timevision" />
-              <img src="/logos/logo-dark.svg" className="h-8 w-auto" alt="Timevision Ótica" />
+              <img src="/logos/logo-1.svg" className="h-10 w-auto" alt="Timevision Ótica" />
             </div>
             <div className="absolute -bottom-4 -right-4 w-full h-full border pointer-events-none" style={{ borderColor: GOLD, zIndex: -1 }} />
           </div>
