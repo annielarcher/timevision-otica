@@ -290,6 +290,7 @@ export default function AdminPage() {
     }
 
     const teamMember = equipe.find(m => m.email.toLowerCase() === emailLower);
+    if (!teamMember) return;
 
     // 4. Master Bypass login
     if (!auth && emailLower === 'admin@timevision.com.br' && loginPassword === 'timevision123') {
@@ -1724,7 +1725,7 @@ export default function AdminPage() {
                       
                       <div className="flex flex-wrap gap-2">
                         <Button
-                          size="xs"
+                          size="sm"
                           variant="outline"
                           onClick={() => {
                             navigator.clipboard.writeText(landingPageUrl);
@@ -1735,7 +1736,7 @@ export default function AdminPage() {
                           Copiar Link de Inscrição
                         </Button>
                         <Button 
-                          size="xs"
+                          size="sm"
                           variant="outline"
                           onClick={() => {
                             setEditingEvento(ev);
@@ -1746,7 +1747,7 @@ export default function AdminPage() {
                           Editar
                         </Button>
                         <Button 
-                          size="xs"
+                          size="sm"
                           variant="outline"
                           onClick={() => handleArchiveEvento(ev)}
                           className="border-slate-800 text-slate-350 hover:bg-slate-800 text-[10px] py-1 px-2.5 font-semibold"
@@ -1754,7 +1755,7 @@ export default function AdminPage() {
                           {ev.status === 'ativo' ? 'Arquivar' : 'Reativar'}
                         </Button>
                         <Button 
-                          size="xs"
+                          size="sm"
                           variant="ghost"
                           onClick={() => handleDeleteEvento(ev.id)}
                           className="text-red-400 hover:bg-red-950/20 hover:text-red-300 text-[10px] py-1 px-2.5 font-semibold"
