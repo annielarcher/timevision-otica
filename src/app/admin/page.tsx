@@ -24,6 +24,7 @@ export default function AdminPage() {
   const { toast } = useToast();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loginEmail, setLoginEmail] = useState('');
+  const [loginStep, setLoginStep] = useState<'email' | 'password'>('email');
   const [loginPassword, setLoginPassword] = useState('');
   const [isFirebaseMode, setIsFirebaseMode] = useState(false);
   
@@ -201,6 +202,11 @@ export default function AdminPage() {
 
   useEffect(() => {
     initializeMockData();
+    
+    // Always load equipe and events list on mount to validate team logins and first access
+    getItems<MembroEquipe>('equipe').then(setEquipe).catch(console.error);
+    getItems<Evento>('eventos').then(setEventos).catch(console.error);
+
     // Read login state if preserved
     if (typeof window !== 'undefined') {
       const isAuth = localStorage.getItem('tv_admin_auth') === 'true';
@@ -241,7 +247,51 @@ export default function AdminPage() {
     e.preventDefault();
     const emailLower = loginEmail.toLowerCase().trim();
 
-    // 1. Master Bypass local (offline/demo fallback)
+    if (loginStep === 'email') {
+      // 1. Master Bypass local check
+      if (!auth && emailLower === 'admin@timevision.com.br') {
+        setLoginStep('password');
+        return;
+      }
+
+      // 2. Check if email belongs to authorized team
+      const teamMember = equipe.find(m => m.email.toLowerCase() === emailLower);
+      if (!teamMember) {
+        toast({
+          variant: 'destructive',
+          title: 'Acesso Negado',
+          description: 'Este e-mail não faz parte da equipe autorizada.',
+        });
+        return;
+      }
+
+      // 3. First Access Flow
+      if (!teamMember.primeiroAcessoDone) {
+        setFirstAccessName(teamMember.nome);
+        setIsFirstAccess(true);
+        toast({
+          title: 'Primeiro Acesso Detectado',
+          description: 'Por favor, cadastre sua senha e e-mail de recuperação para continuar.',
+        });
+      } else {
+        setLoginStep('password');
+      }
+      return;
+    }
+
+    // If loginStep === 'password'
+    if (!loginPassword) {
+      toast({
+        variant: 'destructive',
+        title: 'Senha Obrigatória',
+        description: 'Por favor, insira sua senha para acessar.',
+      });
+      return;
+    }
+
+    const teamMember = equipe.find(m => m.email.toLowerCase() === emailLower);
+
+    // 4. Master Bypass login
     if (!auth && emailLower === 'admin@timevision.com.br' && loginPassword === 'timevision123') {
       setIsAuthenticated(true);
       setCurrentUser({ email: 'admin@timevision.com.br', nome: 'Administrador Principal' });
@@ -257,29 +307,7 @@ export default function AdminPage() {
       return;
     }
 
-    // 2. Check if email belongs to authorized team
-    const teamMember = equipe.find(m => m.email.toLowerCase() === emailLower);
-    if (!teamMember) {
-      toast({
-        variant: 'destructive',
-        title: 'Acesso Negado',
-        description: 'Este e-mail não faz parte da equipe autorizada.',
-      });
-      return;
-    }
-
-    // 3. First Access Flow
-    if (!teamMember.primeiroAcessoDone) {
-      setFirstAccessName(teamMember.nome);
-      setIsFirstAccess(true);
-      toast({
-        title: 'Primeiro Acesso Detectado',
-        description: 'Por favor, cadastre sua senha e e-mail de recuperação para continuar.',
-      });
-      return;
-    }
-
-    // 4. Authenticate
+    // 5. Authenticate
     if (auth) {
       try {
         const userCredential = await signInWithEmailAndPassword(auth, emailLower, loginPassword);
@@ -490,12 +518,17 @@ export default function AdminPage() {
       return;
     }
 
-    await saveItem('clientes', clientData);
-    toast({ title: 'Sucesso', description: 'Cliente salvo com sucesso!' });
-    setIsClientModalOpen(false);
-    setEditingCliente(null);
-    setPdvClienteId(clientData.id);
-    loadData();
+    try {
+      await saveItem('clientes', clientData);
+      toast({ title: 'Sucesso', description: 'Cliente salvo com sucesso!' });
+      setIsClientModalOpen(false);
+      setEditingCliente(null);
+      setPdvClienteId(clientData.id);
+      loadData();
+    } catch (err: any) {
+      console.error('Erro ao salvar cliente:', err);
+      toast({ variant: 'destructive', title: 'Erro ao Salvar', description: err?.message || 'Não foi possível salvar o cliente.' });
+    }
   };
 
   // 5. Save Product (Create/Update)
@@ -519,11 +552,16 @@ export default function AdminPage() {
       return;
     }
 
-    await saveItem('produtos', productData);
-    toast({ title: 'Sucesso', description: 'Produto cadastrado no estoque!' });
-    setIsProductModalOpen(false);
-    setEditingProduto(null);
-    loadData();
+    try {
+      await saveItem('produtos', productData);
+      toast({ title: 'Sucesso', description: 'Produto cadastrado no estoque!' });
+      setIsProductModalOpen(false);
+      setEditingProduto(null);
+      loadData();
+    } catch (err: any) {
+      console.error('Erro ao salvar produto:', err);
+      toast({ variant: 'destructive', title: 'Erro ao Salvar', description: err?.message || 'Não foi possível salvar o produto.' });
+    }
   };
 
   // 6. Delete Handlers
@@ -564,11 +602,16 @@ export default function AdminPage() {
       return;
     }
 
-    await saveItem('eventos', eventData);
-    toast({ title: 'Sucesso', description: 'Evento salvo com sucesso!' });
-    setIsEventModalOpen(false);
-    setEditingEvento(null);
-    loadData();
+    try {
+      await saveItem('eventos', eventData);
+      toast({ title: 'Sucesso', description: 'Evento salvo com sucesso!' });
+      setIsEventModalOpen(false);
+      setEditingEvento(null);
+      loadData();
+    } catch (err: any) {
+      console.error('Erro ao salvar evento:', err);
+      toast({ variant: 'destructive', title: 'Erro ao Salvar', description: err?.message || 'Não foi possível salvar o evento.' });
+    }
   };
 
   const handleArchiveEvento = async (event: Evento) => {
@@ -834,33 +877,46 @@ export default function AdminPage() {
                   value={loginEmail}
                   onChange={(e) => setLoginEmail(e.target.value)}
                   placeholder="admin@timevision.com.br"
-                  className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-sm focus:outline-none focus:border-primary text-white"
+                  className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-sm focus:outline-none focus:border-primary text-white disabled:opacity-50"
                   required
+                  disabled={loginStep === 'password'}
                 />
               </div>
-              <div className="flex flex-col gap-1.5 text-left">
-                <div className="flex justify-between items-center">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Senha</label>
-                  <button 
-                    type="button" 
-                    onClick={() => setIsForgotPassword(true)}
-                    className="text-[10px] text-primary hover:underline font-bold"
-                  >
-                    Esqueceu a senha?
-                  </button>
+              {loginStep === 'password' && (
+                <div className="flex flex-col gap-1.5 text-left">
+                  <div className="flex justify-between items-center">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Senha</label>
+                    <button 
+                      type="button" 
+                      onClick={() => setIsForgotPassword(true)}
+                      className="text-[10px] text-primary hover:underline font-bold"
+                    >
+                      Esqueceu a senha?
+                    </button>
+                  </div>
+                  <input
+                    type="password"
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-sm focus:outline-none focus:border-primary text-white"
+                    autoFocus
+                  />
                 </div>
-                <input
-                  type="password"
-                  value={loginPassword}
-                  onChange={(e) => setLoginPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-sm focus:outline-none focus:border-primary text-white"
-                  required
-                />
-              </div>
+              )}
               <Button type="submit" className="w-full bg-primary text-primary-foreground hover:bg-primary/90 py-5 font-bold">
-                Entrar no Painel
+                {loginStep === 'email' ? 'Continuar' : 'Entrar no Painel'}
               </Button>
+              {loginStep === 'password' && (
+                <Button 
+                  type="button" 
+                  onClick={() => setLoginStep('email')} 
+                  variant="ghost" 
+                  className="w-full text-slate-400 font-bold"
+                >
+                  Voltar
+                </Button>
+              )}
               {process.env.NODE_ENV === 'development' && (
                 <Button 
                   type="button" 

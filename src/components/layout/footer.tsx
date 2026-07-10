@@ -27,8 +27,7 @@ export function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
           <div className="md:col-span-2">
             <div className="flex items-center space-x-3 mb-6">
-              <img src="/logos/icone/1.svg" className="h-8 w-8 brightness-200" alt="Logo Timevision" />
-              <img src="/logos/logo-light.svg" className="h-10 w-auto" alt="Timevision Ótica" />
+              <img src="/logos/logo-1.svg" className="h-12 w-auto brightness-0 invert" alt="Timevision Ótica" />
             </div>
             <p className="text-sm font-body leading-relaxed max-w-xs text-brand-off-white/60 text-justify">
               Boutique óptica de alto padrão no Recreio dos Bandeirantes, Rio de Janeiro. Curadoria exclusiva de grifes internacionais e lentes de altíssima precisão.
