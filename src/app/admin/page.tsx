@@ -1116,9 +1116,6 @@ export default function AdminPage() {
               )}
             </form>
           </CardContent>
-          <div className="p-4 bg-slate-950 border-t border-slate-900 text-[10px] text-center text-slate-500">
-            Acesso local: <span className="text-primary font-bold">admin@timevision.com.br</span> | Senha: <span className="text-primary font-bold">timevision123</span>
-          </div>
         </Card>
       </div>
     );

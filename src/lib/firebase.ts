@@ -182,7 +182,8 @@ export interface MembroEquipe {
 
 // Helper generic database actions with localStorage fallback
 export async function getItems<T>(collectionName: string): Promise<T[]> {
-  if (isFirebaseConfigured && db && auth?.currentUser) {
+  // Always allow fetching 'equipe' without auth so the login screen can check first access status
+  if (isFirebaseConfigured && db && (auth?.currentUser || collectionName === 'equipe')) {
     try {
       const querySnapshot = await getDocs(collection(db, collectionName));
       const items: any[] = [];
