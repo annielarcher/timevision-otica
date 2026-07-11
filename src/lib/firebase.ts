@@ -46,7 +46,9 @@ export interface Cliente {
   cpf: string;
   email: string;
   telefone: string;
+  cep: string;
   endereco: string;
+  dataNascimento: string;
   criadoEm: string;
   cadastradoPor?: string; // Tracks team member email
 }
@@ -62,13 +64,45 @@ export interface Produto {
 }
 
 export interface ReceitaVisual {
-  esfericoOD: string;
-  esfericoOE: string;
-  cilindricoOD: string;
-  cilindricoOE: string;
-  eixoOD: string;
-  eixoOE: string;
-  adicao: string;
+  dataReceita?: string; // Obrigatório nas novas
+  
+  // LONGE
+  longeEsfericoOD?: string;
+  longeEsfericoOE?: string;
+  longeCilindricoOD?: string;
+  longeCilindricoOE?: string;
+  longeEixoOD?: string;
+  longeEixoOE?: string;
+  longeDnpOD?: string;
+  longeDnpOE?: string;
+  longeAlturaOD?: string;
+  longeAlturaOE?: string;
+
+  // PERTO
+  pertoEsfericoOD?: string;
+  pertoEsfericoOE?: string;
+  pertoCilindricoOD?: string;
+  pertoCilindricoOE?: string;
+  pertoEixoOD?: string;
+  pertoEixoOE?: string;
+  pertoDnpOD?: string;
+  pertoDnpOE?: string;
+  pertoAlturaOD?: string;
+  pertoAlturaOE?: string;
+
+  adicao?: string;
+
+  // LEGACY
+  esfericoOD?: string;
+  esfericoOE?: string;
+  cilindricoOD?: string;
+  cilindricoOE?: string;
+  eixoOD?: string;
+  eixoOE?: string;
+  dnpOD?: string;
+  dnpOE?: string;
+  alturaOD?: string;
+  alturaOE?: string;
 }
 
 export interface Venda {
@@ -89,13 +123,42 @@ export interface Venda {
   valorTotal: number;
   custoTotal: number;
   lucroTotal: number;
-  receita: ReceitaVisual;
-  status: 'recebido' | 'laboratorio' | 'montagem' | 'pronto' | 'entregue' | 'orcamento';
+  receita?: ReceitaVisual;
+  status: 'recebido' | 'laboratorio' | 'montagem' | 'pronto' | 'entregue' | 'orcamento' | 'cancelado';
   dataVenda: string;
+  dataEntrega?: string;
+  pagamento?: {
+    metodo: string;
+    parcelas: string;
+    sinal: number;
+    pagamentoNaEntrega?: boolean;
+  };
   validadeOrcamento?: string;
   vendedorId?: string; // Tracks team member email
   vendedorNome?: string; // Tracks team member name
   eventoId?: string; // Linked promotional event ID
+  laboratorioId?: string;
+  laboratorioNome?: string;
+}
+
+export interface LenteLaboratorio {
+  id: string;
+  nome: string;
+  valorBase: number;
+  multiplicadorCusto: number;
+  multiplicadorVenda: number;
+  precoCusto: number;
+  precoVenda: number;
+}
+
+export interface Laboratorio {
+  id: string;
+  nome: string;
+  telefone?: string;
+  endereco?: string;
+  representante?: string;
+  lentes: LenteLaboratorio[];
+  criadoEm: string;
 }
 
 export interface Evento {
