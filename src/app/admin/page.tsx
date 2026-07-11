@@ -3,14 +3,14 @@
 import React, { useState, useEffect } from 'react';
 import { 
   TrendingUp, Users, Package, ShoppingCart, Sparkles, LogOut, Lock, 
-  Search, Plus, Trash2, Edit3, CheckCircle, Clock, Eye, AlertTriangle 
+  Search, Plus, Trash2, Edit3, CheckCircle, Clock, Eye, AlertTriangle, Calendar, FlaskConical, Ban
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { 
   getItems, saveItem, deleteItem, updateItemStatus,
-  Cliente, Produto, Venda, ReceitaVisual, auth
+  Cliente, Produto, Venda, ReceitaVisual, auth, Evento, MembroEquipe, Laboratorio
 } from '@/lib/firebase';
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import dynamic from 'next/dynamic';
@@ -18,27 +18,56 @@ import dynamic from 'next/dynamic';
 const WorkOrderGenerator = dynamic(() => import('@/components/WorkOrderGenerator'), { ssr: false });
 const MarketingFlyer = dynamic(() => import('@/components/MarketingFlyer'), { ssr: false });
 const MarketingBanner = dynamic(() => import('@/components/MarketingBanner'), { ssr: false });
+const LaboratoriosManager = dynamic(() => import('@/components/LaboratoriosManager'), { ssr: false });
 const GOLD = "#B5996A";
 
 export default function AdminPage() {
   const { toast } = useToast();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [loginEmail, setLoginEmail] = useState('');
+  const [loginStep, setLoginStep] = useState<'email' | 'password'>('email');
   const [loginPassword, setLoginPassword] = useState('');
   const [isFirebaseMode, setIsFirebaseMode] = useState(false);
   
   // Navigation Tabs
-  const [activeTab, setActiveTab] = useState<'dash' | 'pdv' | 'clientes' | 'estoque' | 'mkt'>('dash');
+  const [activeTab, setActiveTab] = useState<'dash' | 'pdv' | 'clientes' | 'estoque' | 'eventos' | 'mkt' | 'laboratorios'>('dash');
   const [marketingMode, setMarketingMode] = useState<'flyer' | 'banner'>('flyer');
 
   // Database states
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [vendas, setVendas] = useState<Venda[]>([]);
+  const [eventos, setEventos] = useState<Evento[]>([]);
+  const [leads, setLeads] = useState<any[]>([]);
+  const [equipe, setEquipe] = useState<MembroEquipe[]>([]);
+  const [laboratorios, setLaboratorios] = useState<Laboratorio[]>([]);
 
-  // Search and Filter states
+  // Multi-user Auth states
+  const [currentUser, setCurrentUser] = useState<{ email: string; nome: string } | null>(null);
+  const [isFirstAccess, setIsFirstAccess] = useState(false);
+  const [firstAccessName, setFirstAccessName] = useState('');
+  const [firstAccessPassword, setFirstAccessPassword] = useState('');
+  const [firstAccessRecovery, setFirstAccessRecovery] = useState('');
+  
+  // Password Recovery States
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
+  const [recoveryInputEmail, setRecoveryInputEmail] = useState('');
+  const [recoveryInputGmail, setRecoveryInputGmail] = useState('');
+
+  // Event modal/editor
+  const [isEventModalOpen, setIsEventModalOpen] = useState(false);
+  const [editingEvento, setEditingEvento] = useState<Evento | null>(null);
+
+  // Search, Filter and Vendor tracking states
   const [searchClient, setSearchClient] = useState('');
   const [searchProduct, setSearchProduct] = useState('');
+  const [selectedEventoId, setSelectedEventoId] = useState<string>('todos');
+  const [selectedVendedorId, setSelectedVendedorId] = useState<string>('todos');
+  
+  // Kanban & Batch Edit States
+  const [batchOrderIds, setBatchOrderIds] = useState('');
+  const [batchStatus, setBatchStatus] = useState('laboratorio');
 
   // Modals / Editors
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
@@ -52,16 +81,37 @@ export default function AdminPage() {
   // PDV Order state
   const [pdvSaleType, setPdvSaleType] = useState<'venda' | 'orcamento'>('venda');
   const [pdvClienteId, setPdvClienteId] = useState('');
+  const [pdvEventoId, setPdvEventoId] = useState('');
+  const [pdvLaboratorioId, setPdvLaboratorioId] = useState('');
   const [pdvFrameId, setPdvFrameId] = useState('');
   const [pdvLensId, setPdvLensId] = useState('');
   const [pdvPriceTotal, setPdvPriceTotal] = useState(0);
-  const [pdvEsfOD, setPdvEsfOD] = useState('0.00');
-  const [pdvEsfOE, setPdvEsfOE] = useState('0.00');
-  const [pdvCilOD, setPdvCilOD] = useState('0.00');
-  const [pdvCilOE, setPdvCilOE] = useState('0.00');
-  const [pdvEixoOD, setPdvEixoOD] = useState('');
-  const [pdvEixoOE, setPdvEixoOE] = useState('');
+  const [pdvDataReceita, setPdvDataReceita] = useState('');
+  
+  const [pdvLongeEsfOD, setPdvLongeEsfOD] = useState('');
+  const [pdvLongeEsfOE, setPdvLongeEsfOE] = useState('');
+  const [pdvLongeCilOD, setPdvLongeCilOD] = useState('');
+  const [pdvLongeCilOE, setPdvLongeCilOE] = useState('');
+  const [pdvLongeEixoOD, setPdvLongeEixoOD] = useState('');
+  const [pdvLongeEixoOE, setPdvLongeEixoOE] = useState('');
+  const [pdvLongeDnpOD, setPdvLongeDnpOD] = useState('');
+  const [pdvLongeDnpOE, setPdvLongeDnpOE] = useState('');
+  const [pdvLongeAlturaOD, setPdvLongeAlturaOD] = useState('');
+  const [pdvLongeAlturaOE, setPdvLongeAlturaOE] = useState('');
+
+  const [pdvPertoEsfOD, setPdvPertoEsfOD] = useState('');
+  const [pdvPertoEsfOE, setPdvPertoEsfOE] = useState('');
+  const [pdvPertoCilOD, setPdvPertoCilOD] = useState('');
+  const [pdvPertoCilOE, setPdvPertoCilOE] = useState('');
+  const [pdvPertoEixoOD, setPdvPertoEixoOD] = useState('');
+  const [pdvPertoEixoOE, setPdvPertoEixoOE] = useState('');
+  const [pdvPertoDnpOD, setPdvPertoDnpOD] = useState('');
+  const [pdvPertoDnpOE, setPdvPertoDnpOE] = useState('');
+  const [pdvPertoAlturaOD, setPdvPertoAlturaOD] = useState('');
+  const [pdvPertoAlturaOE, setPdvPertoAlturaOE] = useState('');
+
   const [pdvAdicao, setPdvAdicao] = useState('');
+  const [pdvCodigoLente, setPdvCodigoLente] = useState('');
 
   // 1. Initial Mock Database Setup (LocalStorage)
   const initializeMockData = () => {
@@ -72,9 +122,9 @@ export default function AdminPage() {
 
       if (!storedClients) {
         const mockClients: Cliente[] = [
-          { id: 'c-1', nome: 'Mariana da Silva', cpf: '123.456.789-00', email: 'mariana@email.com', telefone: '(21) 98888-7777', endereco: 'Rua das Flores, 123, Rio de Janeiro - RJ', criadoEm: new Date().toISOString() },
-          { id: 'c-2', nome: 'Carlos Eduardo', cpf: '987.654.321-11', email: 'carlos@email.com', telefone: '(21) 97777-6666', endereco: 'Av. Central, 450, Niterói - RJ', criadoEm: new Date().toISOString() },
-          { id: 'c-3', nome: 'Ana Beatriz Mendes', cpf: '456.123.789-22', email: 'ana@email.com', telefone: '(21) 96666-5555', endereco: 'Rua do Resende, 89, Rio de Janeiro - RJ', criadoEm: new Date().toISOString() }
+          { id: 'c-1', nome: 'Mariana da Silva', cpf: '123.456.789-00', email: 'mariana@email.com', telefone: '(21) 98888-7777', endereco: 'Rua das Flores, 123, Rio de Janeiro - RJ', cep: '20000-000', dataNascimento: '1990-01-01', criadoEm: new Date().toISOString() },
+          { id: 'c-2', nome: 'Carlos Eduardo', cpf: '987.654.321-11', email: 'carlos@email.com', telefone: '(21) 97777-6666', endereco: 'Av. Central, 450, Niterói - RJ', cep: '24000-000', dataNascimento: '1985-05-15', criadoEm: new Date().toISOString() },
+          { id: 'c-3', nome: 'Ana Beatriz Mendes', cpf: '456.123.789-22', email: 'ana@email.com', telefone: '(21) 96666-5555', endereco: 'Rua do Resende, 89, Rio de Janeiro - RJ', cep: '20231-092', dataNascimento: '1995-10-20', criadoEm: new Date().toISOString() }
         ];
         localStorage.setItem('tv_clientes', JSON.stringify(mockClients));
       }
@@ -106,7 +156,7 @@ export default function AdminPage() {
             valorTotal: 609,
             custoTotal: 280,
             lucroTotal: 329,
-            receita: { esfericoOD: '+1.25', esfericoOE: '+1.50', cilindricoOD: '0.00', cilindricoOE: '0.00', eixoOD: '', eixoOE: '', adicao: '' },
+            receita: { longeEsfericoOD: '+1.25', longeEsfericoOE: '+1.50', longeCilindricoOD: '0.00', longeCilindricoOE: '0.00', longeEixoOD: '', longeEixoOE: '', adicao: '' },
             status: 'laboratorio',
             dataVenda: new Date(Date.now() - 86400000).toISOString().split('T')[0]
           },
@@ -125,12 +175,32 @@ export default function AdminPage() {
             valorTotal: 809,
             custoTotal: 400,
             lucroTotal: 409,
-            receita: { esfericoOD: '-2.50', esfericoOE: '-2.25', cilindricoOD: '-0.75', cilindricoOE: '-0.50', eixoOD: '90', eixoOE: '85', adicao: '' },
+            receita: { longeEsfericoOD: '-2.50', longeEsfericoOE: '-2.25', longeCilindricoOD: '-0.75', longeCilindricoOE: '-0.50', longeEixoOD: '90', longeEixoOE: '85', adicao: '' },
             status: 'pronto',
             dataVenda: new Date(Date.now() - 172800000).toISOString().split('T')[0]
           }
         ];
         localStorage.setItem('tv_vendas', JSON.stringify(mockSales));
+      }
+
+      const storedEvents = localStorage.getItem('tv_eventos');
+      if (!storedEvents) {
+        const mockEvents: Evento[] = [
+          { id: 'ev-1', nome: 'Ação Social Igreja de Nilópolis', data: '2026-08-15', local: 'Rua Principal, Nilópolis', status: 'ativo', criadoEm: new Date().toISOString() },
+          { id: 'ev-2', nome: 'Feira Industrial Saúde Visual', data: '2026-09-10', local: 'Auditório Firjan, Centro', status: 'ativo', criadoEm: new Date().toISOString() }
+        ];
+        localStorage.setItem('tv_eventos', JSON.stringify(mockEvents));
+      }
+
+      const storedEquipe = localStorage.getItem('tv_equipe');
+      if (!storedEquipe) {
+        const mockEquipe: MembroEquipe[] = [
+          { email: 'ana@timevision.com.br', nome: 'Ana', primeiroAcessoDone: false, criadoEm: new Date().toISOString() },
+          { email: 'moises@timevision.com.br', nome: 'Moisés', primeiroAcessoDone: false, criadoEm: new Date().toISOString() },
+          { email: 'alef@timevision.com.br', nome: 'Alef', primeiroAcessoDone: false, criadoEm: new Date().toISOString() },
+          { email: 'annie@timevision.com.br', nome: 'Annie', primeiroAcessoDone: false, criadoEm: new Date().toISOString() }
+        ];
+        localStorage.setItem('tv_equipe', JSON.stringify(mockEquipe));
       }
     }
   };
@@ -138,14 +208,22 @@ export default function AdminPage() {
   // 2. Fetch Data from Storage/Firebase
   const loadData = async () => {
     try {
-      const [cList, pList, vList] = await Promise.all([
+      const [cList, pList, vList, eList, lList, eqList, labList] = await Promise.all([
         getItems<Cliente>('clientes'),
         getItems<Produto>('produtos'),
-        getItems<Venda>('vendas')
+        getItems<Venda>('vendas'),
+        getItems<Evento>('eventos'),
+        getItems<any>('inscricoes'),
+        getItems<MembroEquipe>('equipe'),
+        getItems<Laboratorio>('laboratorios')
       ]);
       setClientes(cList);
       setProdutos(pList);
       setVendas(vList);
+      setEventos(eList);
+      setLeads(lList);
+      setEquipe(eqList);
+      setLaboratorios(labList);
     } catch (error) {
       console.error('Error loading DB:', error);
     }
@@ -153,13 +231,82 @@ export default function AdminPage() {
 
   useEffect(() => {
     initializeMockData();
-    // Read login state if preserved
-    if (typeof window !== 'undefined') {
-      const isAuth = localStorage.getItem('tv_admin_auth') === 'true';
-      if (isAuth) {
-        setIsAuthenticated(true);
-        loadData();
+    
+    // Always load equipe and events list on mount to validate team logins and first access
+    getItems<MembroEquipe>('equipe').then(setEquipe).catch(console.error);
+    getItems<Evento>('eventos').then(setEventos).catch(console.error);
+
+    const checkLocalhostBypass = () => {
+      const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+      if (isLocalhost) {
+        const storedUser = localStorage.getItem('tv_admin_user');
+        const isAuth = localStorage.getItem('tv_admin_auth') === 'true';
+        if (isAuth && storedUser) {
+           const parsedUser = JSON.parse(storedUser);
+           if (parsedUser.email === 'admin@timevision.com.br') {
+             setIsAuthenticated(true);
+             setCurrentUser(parsedUser);
+             loadData();
+             setIsLoadingAuth(false);
+             return true;
+           }
+        }
       }
+      return false;
+    };
+
+    if (typeof window !== 'undefined') {
+      // Check if this is a password reset redirect
+      const params = new URLSearchParams(window.location.search);
+      const resetEmail = params.get('reset_email');
+      if (resetEmail) {
+        setLoginEmail(resetEmail);
+        setIsFirstAccess(true);
+        toast({
+          title: 'Redefinição de Senha',
+          description: 'Defina sua nova senha de acesso abaixo.',
+        });
+      }
+    }
+
+    if (auth) {
+      import('firebase/auth').then(({ onAuthStateChanged }) => {
+        const unsubscribe = onAuthStateChanged(auth, async (user) => {
+          if (user) {
+            setIsAuthenticated(true);
+            const userProfile = { email: user.email || '', nome: user.displayName || 'Usuário Autenticado' };
+            setCurrentUser(userProfile);
+            if (typeof window !== 'undefined') {
+              localStorage.setItem('tv_admin_user', JSON.stringify(userProfile));
+              localStorage.setItem('tv_admin_auth', 'true');
+            }
+            loadData();
+          } else {
+            if (!checkLocalhostBypass()) {
+              setIsAuthenticated(false);
+              setCurrentUser(null);
+              if (typeof window !== 'undefined') {
+                localStorage.removeItem('tv_admin_auth');
+                localStorage.removeItem('tv_admin_user');
+              }
+            }
+          }
+          setIsLoadingAuth(false);
+        });
+        return () => unsubscribe();
+      });
+    } else {
+       // Fallback to purely local if Firebase is not configured
+       const isAuth = localStorage.getItem('tv_admin_auth') === 'true';
+       if (isAuth) {
+         setIsAuthenticated(true);
+         const storedUser = localStorage.getItem('tv_admin_user');
+         if (storedUser) {
+           setCurrentUser(JSON.parse(storedUser));
+         }
+         loadData();
+       }
+       setIsLoadingAuth(false);
     }
   }, []);
 
@@ -175,52 +322,256 @@ export default function AdminPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // 1. Fallback / Test bypass static credentials (local mode/demo)
-    if (loginEmail === 'admin@timevision.com' && loginPassword === 'timevision123') {
-      setIsAuthenticated(true);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('tv_admin_auth', 'true');
+    const emailLower = loginEmail.toLowerCase().trim();
+
+    if (loginStep === 'email') {
+      // 1. Master Bypass local check
+      const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+      if (isLocalhost && emailLower === 'admin@timevision.com.br') {
+        setLoginStep('password');
+        return;
       }
-      loadData();
+
+      // 2. Check if email belongs to authorized team
+      const teamMember = equipe.find(m => m.email.toLowerCase() === emailLower);
+      if (!teamMember) {
+        toast({
+          variant: 'destructive',
+          title: 'Acesso Negado',
+          description: 'Este e-mail não faz parte da equipe autorizada.',
+        });
+        return;
+      }
+
+      // 3. First Access Flow
+      if (!teamMember.primeiroAcessoDone) {
+        setFirstAccessName(teamMember.nome);
+        setIsFirstAccess(true);
+        toast({
+          title: 'Primeiro Acesso Detectado',
+          description: 'Por favor, cadastre sua senha e e-mail de recuperação para continuar.',
+        });
+      } else {
+        setLoginStep('password');
+      }
+      return;
+    }
+
+    // If loginStep === 'password'
+    if (!loginPassword) {
       toast({
-        title: 'Bem-vindo(a) (Bypass de Testes)',
-        description: 'Login efetuado no modo local/offline, ignorando o Firebase Auth.',
+        variant: 'destructive',
+        title: 'Senha Obrigatória',
+        description: 'Por favor, insira sua senha para acessar.',
       });
       return;
     }
 
-    // 2. Se o Firebase estiver configurado e o auth inicializado, tenta autenticação Firebase
+    // 4. Master Bypass login for localhost
+    const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+    if (isLocalhost && emailLower === 'admin@timevision.com.br' && loginPassword === 'timevision123') {
+      setIsAuthenticated(true);
+      setCurrentUser({ email: 'admin@timevision.com.br', nome: 'Administrador Local' });
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('tv_admin_auth', 'true');
+        localStorage.setItem('tv_admin_user', JSON.stringify({ email: 'admin@timevision.com.br', nome: 'Administrador Local' }));
+      }
+      loadData();
+      toast({
+        title: 'Acesso Admin Local',
+        description: 'Login efetuado via ambiente de desenvolvimento.',
+      });
+      return;
+    }
+
+    const teamMember = equipe.find(m => m.email.toLowerCase() === emailLower);
+    if (!teamMember) return;
+
+    // 5. Authenticate
     if (auth) {
       try {
-        await signInWithEmailAndPassword(auth, loginEmail, loginPassword);
+        const userCredential = await signInWithEmailAndPassword(auth, emailLower, loginPassword);
         setIsAuthenticated(true);
+        const userProfile = { email: emailLower, nome: teamMember.nome };
+        setCurrentUser(userProfile);
         if (typeof window !== 'undefined') {
           localStorage.setItem('tv_admin_auth', 'true');
+          localStorage.setItem('tv_admin_user', JSON.stringify(userProfile));
         }
         loadData();
         toast({
           title: 'Bem-vindo(a)',
-          description: 'Login efetuado com sucesso via Firebase.',
+          description: `Login de ${teamMember.nome} efetuado com sucesso via Firebase.`,
         });
-        return;
       } catch (error: any) {
         console.error("Firebase auth error:", error);
         toast({
           variant: 'destructive',
-          title: 'Erro de Autenticação Firebase',
-          description: error.message || 'E-mail ou senha incorretos.',
+          title: 'Erro de Autenticação',
+          description: 'E-mail ou senha incorretos.',
         });
-        return;
+      }
+    } else {
+      // Local/Offline auth: Read password from equipe document
+      const localPassword = localStorage.getItem(`tv_pwd_${emailLower}`);
+      if (localPassword === loginPassword) {
+        setIsAuthenticated(true);
+        const userProfile = { email: emailLower, nome: teamMember.nome };
+        setCurrentUser(userProfile);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('tv_admin_auth', 'true');
+          localStorage.setItem('tv_admin_user', JSON.stringify(userProfile));
+        }
+        loadData();
+        toast({
+          title: 'Bem-vindo(a) (Modo Local)',
+          description: `Login de ${teamMember.nome} efetuado com sucesso.`,
+        });
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Erro de Autenticação',
+          description: 'E-mail ou senha incorretos.',
+        });
       }
     }
+  };
 
-    // Se as credenciais locais falharem e não houver Firebase/outro meio
-    toast({
-      variant: 'destructive',
-      title: 'Erro de Autenticação',
-      description: 'E-mail ou senha incorretos.',
-    });
+  const handleFirstAccessSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const emailLower = loginEmail.toLowerCase().trim();
+    const teamMember = equipe.find(m => m.email.toLowerCase() === emailLower);
+    if (!teamMember) return;
+
+    if (firstAccessPassword.length < 6) {
+      toast({
+        variant: 'destructive',
+        title: 'Senha Fraca',
+        description: 'A senha deve conter no mínimo 6 caracteres.',
+      });
+      return;
+    }
+
+    try {
+      if (auth) {
+        const { createUserWithEmailAndPassword, signInWithEmailAndPassword } = await import('firebase/auth');
+        try {
+          await createUserWithEmailAndPassword(auth, emailLower, firstAccessPassword);
+        } catch (authErr: any) {
+          if (authErr.code === 'auth/email-already-in-use') {
+            try {
+              await signInWithEmailAndPassword(auth, emailLower, firstAccessPassword);
+            } catch (loginErr) {
+              throw new Error('Seu e-mail já possui um cadastro! Feche esta tela e clique em "Fazer Login" (use "Recuperar Senha" se necessário).');
+            }
+          } else {
+            throw authErr;
+          }
+        }
+      } else {
+        localStorage.setItem(`tv_pwd_${emailLower}`, firstAccessPassword);
+      }
+
+      // Save updated team member profile
+      const updatedMember: MembroEquipe = {
+        ...teamMember,
+        nome: firstAccessName,
+        emailRecuperacao: firstAccessRecovery,
+        primeiroAcessoDone: true
+      };
+
+      await saveItem('equipe', updatedMember);
+      
+      // Update state
+      setEquipe(prev => prev.map(m => m.email === emailLower ? updatedMember : m));
+      setIsAuthenticated(true);
+      const userProfile = { email: emailLower, nome: firstAccessName };
+      setCurrentUser(userProfile);
+      
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('tv_admin_auth', 'true');
+        localStorage.setItem('tv_admin_user', JSON.stringify(userProfile));
+      }
+
+      setIsFirstAccess(false);
+      loadData();
+
+      toast({
+        title: 'Cadastro Realizado!',
+        description: `Seu usuário ${firstAccessName} foi cadastrado e logado.`,
+      });
+    } catch (err: any) {
+      console.error('Error in first access registration:', err);
+      toast({
+        variant: 'destructive',
+        title: 'Erro no Cadastro',
+        description: err.message || 'Erro ao registrar usuário. Tente novamente.',
+      });
+    }
+  };
+
+  const handlePasswordRecovery = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const emailLower = recoveryInputEmail.toLowerCase().trim();
+    const teamMember = equipe.find(m => m.email.toLowerCase() === emailLower);
+
+    if (!teamMember) {
+      toast({
+        variant: 'destructive',
+        title: 'Usuário não encontrado',
+        description: 'E-mail não faz parte da equipe autorizada.',
+      });
+      return;
+    }
+
+    if (!teamMember.primeiroAcessoDone) {
+      toast({
+        variant: 'destructive',
+        title: 'Ação Bloqueada',
+        description: 'Este usuário ainda não realizou o primeiro acesso para configurar a senha.',
+      });
+      return;
+    }
+
+    if (teamMember.emailRecuperacao !== recoveryInputGmail) {
+      toast({
+        variant: 'destructive',
+        title: 'Verificação Falhou',
+        description: 'O e-mail de recuperação não coincide com o e-mail cadastrado.',
+      });
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: emailLower, recoveryEmail: recoveryInputGmail })
+      });
+      
+      const resData = await response.json();
+      
+      if (response.ok) {
+        toast({
+          title: 'Redefinição Enviada',
+          description: `Um link de redefinição foi gerado para o e-mail: ${recoveryInputGmail}.`,
+        });
+        
+        // Output token link for dev console bypass helper
+        if (resData.debugLink) {
+          console.log(`[DEVS RESET LINK]: ${resData.debugLink}`);
+        }
+        setIsForgotPassword(false);
+      } else {
+        throw new Error(resData.error || 'Erro na API.');
+      }
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao redefinir',
+        description: error.message || 'Falha ao solicitar redefinição. Tente novamente.',
+      });
+    }
   };
 
   const handleLogout = async () => {
@@ -249,8 +600,11 @@ export default function AdminPage() {
       cpf: formData.get('cpf') as string,
       email: formData.get('email') as string,
       telefone: formData.get('telefone') as string,
+      cep: formData.get('cep') as string,
       endereco: formData.get('endereco') as string,
-      criadoEm: editingCliente?.criadoEm || new Date().toISOString()
+      dataNascimento: formData.get('dataNascimento') as string,
+      criadoEm: editingCliente?.criadoEm || new Date().toISOString(),
+      cadastradoPor: editingCliente?.cadastradoPor || currentUser?.email || 'admin@timevision.com.br'
     };
 
     if (!clientData.nome || !clientData.cpf) {
@@ -258,12 +612,17 @@ export default function AdminPage() {
       return;
     }
 
-    await saveItem('clientes', clientData);
-    toast({ title: 'Sucesso', description: 'Cliente salvo com sucesso!' });
-    setIsClientModalOpen(false);
-    setEditingCliente(null);
-    setPdvClienteId(clientData.id);
-    loadData();
+    try {
+      await saveItem('clientes', clientData);
+      toast({ title: 'Sucesso', description: 'Cliente salvo com sucesso!' });
+      setIsClientModalOpen(false);
+      setEditingCliente(null);
+      setPdvClienteId(clientData.id);
+      loadData();
+    } catch (err: any) {
+      console.error('Erro ao salvar cliente:', err);
+      toast({ variant: 'destructive', title: 'Erro ao Salvar', description: err?.message || 'Não foi possível salvar o cliente.' });
+    }
   };
 
   // 5. Save Product (Create/Update)
@@ -279,6 +638,7 @@ export default function AdminPage() {
       quantidade: Number(formData.get('quantidade')),
       precoCusto: Number(formData.get('precoCusto')),
       precoVenda: Number(formData.get('precoVenda')),
+      criadoPor: editingProduto?.criadoPor || currentUser?.email || 'admin@timevision.com.br'
     };
 
     if (!productData.nome || !productData.precoVenda) {
@@ -286,11 +646,16 @@ export default function AdminPage() {
       return;
     }
 
-    await saveItem('produtos', productData);
-    toast({ title: 'Sucesso', description: 'Produto cadastrado no estoque!' });
-    setIsProductModalOpen(false);
-    setEditingProduto(null);
-    loadData();
+    try {
+      await saveItem('produtos', productData);
+      toast({ title: 'Sucesso', description: 'Produto cadastrado no estoque!' });
+      setIsProductModalOpen(false);
+      setEditingProduto(null);
+      loadData();
+    } catch (err: any) {
+      console.error('Erro ao salvar produto:', err);
+      toast({ variant: 'destructive', title: 'Erro ao Salvar', description: err?.message || 'Não foi possível salvar o produto.' });
+    }
   };
 
   // 6. Delete Handlers
@@ -310,13 +675,69 @@ export default function AdminPage() {
     }
   };
 
+  // Event Handlers
+  const handleSaveEvento = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const form = e.currentTarget as HTMLFormElement;
+    const formData = new FormData(form);
+
+    const eventData: Evento = {
+      id: editingEvento?.id || `ev-${Math.floor(1000 + Math.random() * 9000)}`,
+      nome: formData.get('nome') as string,
+      data: formData.get('data') as string,
+      local: formData.get('local') as string,
+      status: editingEvento?.status || 'ativo',
+      criadoEm: editingEvento?.criadoEm || new Date().toISOString(),
+      criadoPor: editingEvento?.criadoPor || currentUser?.email || 'admin@timevision.com.br'
+    };
+
+    if (!eventData.nome || !eventData.data) {
+      toast({ variant: 'destructive', title: 'Campos Obrigatórios', description: 'Preencha Nome e Data do evento.' });
+      return;
+    }
+
+    try {
+      await saveItem('eventos', eventData);
+      toast({ title: 'Sucesso', description: 'Evento salvo com sucesso!' });
+      setIsEventModalOpen(false);
+      setEditingEvento(null);
+      loadData();
+    } catch (err: any) {
+      console.error('Erro ao salvar evento:', err);
+      toast({ variant: 'destructive', title: 'Erro ao Salvar', description: err?.message || 'Não foi possível salvar o evento.' });
+    }
+  };
+
+  const handleArchiveEvento = async (event: Evento) => {
+    const updated: Evento = {
+      ...event,
+      status: event.status === 'ativo' ? 'arquivado' : 'ativo'
+    };
+    await saveItem('eventos', updated);
+    toast({ title: 'Status Alterado', description: `Evento ${event.status === 'ativo' ? 'arquivado' : 'ativado'} com sucesso.` });
+    loadData();
+  };
+
+  const handleDeleteEvento = async (id: string) => {
+    if (confirm('Tem certeza que deseja excluir permanentemente este evento e suas configurações? As inscrições continuarão registradas.')) {
+      await deleteItem('eventos', id);
+      toast({ title: 'Evento Excluído', description: 'O evento foi removido com sucesso.' });
+      loadData();
+    }
+  };
+
   // 7. POS Sale & OS/Budget Generation Trigger
   const handlePdvSale = (e: React.FormEvent, type: 'venda' | 'orcamento') => {
     e.preventDefault();
-    if (!pdvClienteId) {
-      toast({ variant: 'destructive', title: 'Dados Incompletos', description: 'Selecione um cliente cadastrado.' });
+    if (!pdvClienteId || (!pdvFrameId && !pdvLensId)) {
+      toast({
+        variant: 'destructive',
+        title: 'Dados Incompletos',
+        description: 'Selecione um cliente e pelo menos um produto (armação ou lente).',
+      });
       return;
     }
+
 
     const client = clientes.find(c => c.id === pdvClienteId);
     if (!client) return;
@@ -353,24 +774,61 @@ export default function AdminPage() {
       produtos: saleProducts,
       valorTotal: pdvPriceTotal,
       receita: {
-        esfericoOD: pdvEsfOD,
-        esfericoOE: pdvEsfOE,
-        cilindricoOD: pdvCilOD,
-        cilindricoOE: pdvCilOE,
-        eixoOD: pdvEixoOD,
-        eixoOE: pdvEixoOE,
-        adicao: pdvAdicao
+        dataReceita: orderDate,
+        longeEsfericoOD: pdvLongeEsfOD,
+        longeEsfericoOE: pdvLongeEsfOE,
+        longeCilindricoOD: pdvLongeCilOD,
+        longeCilindricoOE: pdvLongeCilOE,
+        longeEixoOD: pdvLongeEixoOD,
+        longeEixoOE: pdvLongeEixoOE,
+        longeDnpOD: pdvLongeDnpOD,
+        longeDnpOE: pdvLongeDnpOE,
+        longeAlturaOD: pdvLongeAlturaOD,
+        longeAlturaOE: pdvLongeAlturaOE,
+        pertoEsfericoOD: pdvPertoEsfOD,
+        pertoEsfericoOE: pdvPertoEsfOE,
+        pertoCilindricoOD: pdvPertoCilOD,
+        pertoCilindricoOE: pdvPertoCilOE,
+        pertoEixoOD: pdvPertoEixoOD,
+        pertoEixoOE: pdvPertoEixoOE,
+        pertoDnpOD: pdvPertoDnpOD,
+        pertoDnpOE: pdvPertoDnpOE,
+        pertoAlturaOD: pdvPertoAlturaOD,
+        pertoAlturaOE: pdvPertoAlturaOE,
+        adicao: pdvAdicao,
+        codigoLente: pdvCodigoLente,
       },
       status: type === 'venda' ? 'recebido' : 'orcamento',
       dataVenda: orderDate,
-      validadeOrcamento: type === 'orcamento' ? new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0] : undefined
+      validadeOrcamento: type === 'orcamento' ? new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0] : undefined,
+      vendedorId: currentUser?.email || 'admin@timevision.com.br',
+      vendedorNome: currentUser?.nome || 'Consultor Óptico',
+      eventoId: pdvEventoId !== '' ? pdvEventoId : undefined,
+      laboratorioId: pdvLaboratorioId !== '' ? pdvLaboratorioId : undefined,
+      laboratorioNome: laboratorios.find(l => l.id === pdvLaboratorioId)?.nome
     };
 
     setActiveOSVenda(pendingVenda);
   };
 
   // Financial Calculators
-  const realSales = vendas.filter(v => v.status !== 'orcamento');
+  const realSales = vendas.filter(v => {
+    if (v.status === 'orcamento') return false;
+    
+    // Filter by Vendedor
+    if (selectedVendedorId !== 'todos' && v.vendedorId !== selectedVendedorId) {
+      return false;
+    }
+    
+    // Filter by Evento
+    if (selectedEventoId !== 'todos') {
+      if (selectedEventoId === 'loja' && v.eventoId) return false;
+      if (selectedEventoId !== 'loja' && v.eventoId !== selectedEventoId) return false;
+    }
+    
+    return true;
+  });
+
   const totalRevenue = realSales.reduce((acc, curr) => acc + curr.valorTotal, 0);
   const totalCost = realSales.reduce((acc, curr) => acc + (curr.custoTotal || curr.valorTotal * 0.5), 0);
   const totalProfit = totalRevenue - totalCost;
@@ -393,10 +851,188 @@ export default function AdminPage() {
     loadData();
   };
 
+  const handleBatchUpdate = async () => {
+    if (!batchOrderIds.trim()) {
+      toast({ title: 'Aviso', description: 'Insira os números dos pedidos.', variant: 'destructive' });
+      return;
+    }
+    const ids = batchOrderIds.match(/\d+/g);
+    if (!ids || ids.length === 0) {
+      toast({ title: 'Aviso', description: 'Nenhum número válido encontrado.', variant: 'destructive' });
+      return;
+    }
+    
+    let updatedCount = 0;
+    for (const num of ids) {
+      const fullId = `TV-${num}`;
+      const venda = vendas.find(v => v.id === fullId || v.id === num);
+      if (venda && venda.status !== batchStatus) {
+        await updateItemStatus('vendas', venda.id, batchStatus);
+        updatedCount++;
+      }
+    }
+    
+    if (updatedCount > 0) {
+      toast({ title: 'Sucesso', description: `${updatedCount} pedidos atualizados.` });
+      setBatchOrderIds('');
+      loadData();
+    } else {
+      toast({ title: 'Aviso', description: 'Nenhum pedido precisou ser atualizado.' });
+    }
+  };
+
+  // Drag and Drop Handlers
+  const handleDragStart = (e: React.DragEvent, id: string) => {
+    e.dataTransfer.setData('text/plain', id);
+  };
+  
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault(); // Necessário para permitir o drop
+  };
+  
+  const handleDrop = async (e: React.DragEvent, newStatus: string) => {
+    e.preventDefault();
+    const id = e.dataTransfer.getData('text/plain');
+    if (id) {
+      const venda = vendas.find(v => v.id === id);
+      if (venda && venda.status !== newStatus) {
+        await handleUpdateStatus(id, newStatus);
+      }
+    }
+  };
+
   // Get current date string for input
   const orderDate = new Date().toISOString().split('T')[0];
 
+  if (isLoadingAuth) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
+        <div className="w-10 h-10 border-4 border-slate-800 border-t-primary rounded-full animate-spin mb-4"></div>
+        <p className="text-xs uppercase font-bold tracking-widest text-slate-400">Verificando sessão segura...</p>
+      </div>
+    );
+  }
+
   if (!isAuthenticated) {
+    if (isFirstAccess) {
+      return (
+        <div className="min-h-[80vh] flex items-center justify-center bg-slate-950 p-4">
+          <Card className="w-full max-w-md bg-slate-900 border-slate-800 shadow-2xl relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-tr from-primary/10 via-transparent to-transparent pointer-events-none" />
+            <CardHeader className="text-center relative z-10">
+              <div className="h-12 w-12 rounded-xl bg-primary/20 flex items-center justify-center text-primary mx-auto mb-4 border border-primary/30">
+                <Sparkles className="h-6 w-6" />
+              </div>
+              <CardTitle className="text-2xl font-black font-headline text-white">Primeiro Acesso / Redefinição</CardTitle>
+              <CardDescription>Cadastre seus dados para ativar a conta de {loginEmail}.</CardDescription>
+            </CardHeader>
+            <CardContent className="relative z-10">
+              <form onSubmit={handleFirstAccessSubmit} className="space-y-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Seu Nome</label>
+                  <input
+                    type="text"
+                    value={firstAccessName}
+                    onChange={(e) => setFirstAccessName(e.target.value)}
+                    placeholder="Seu Nome Completo"
+                    className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-sm focus:outline-none focus:border-primary text-white"
+                    required
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Senha de Acesso (Min. 6 digitos)</label>
+                  <input
+                    type="password"
+                    value={firstAccessPassword}
+                    onChange={(e) => setFirstAccessPassword(e.target.value)}
+                    placeholder="Sua senha desejada"
+                    className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-sm focus:outline-none focus:border-primary text-white"
+                    required
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">E-mail de Recuperação (Gmail, Hotmail, etc.)</label>
+                  <input
+                    type="email"
+                    value={firstAccessRecovery}
+                    onChange={(e) => setFirstAccessRecovery(e.target.value)}
+                    placeholder="seu.pessoal@gmail.com"
+                    className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-sm focus:outline-none focus:border-primary text-white"
+                    required
+                  />
+                </div>
+                <Button type="submit" className="w-full bg-primary text-primary-foreground hover:bg-primary/90 py-5 font-bold">
+                  Salvar e Acessar Painel
+                </Button>
+                <Button 
+                  type="button" 
+                  onClick={() => setIsFirstAccess(false)} 
+                  variant="ghost" 
+                  className="w-full text-slate-400 font-bold"
+                >
+                  Voltar para o Login
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
+
+    if (isForgotPassword) {
+      return (
+        <div className="min-h-[80vh] flex items-center justify-center bg-slate-950 p-4">
+          <Card className="w-full max-w-md bg-slate-900 border-slate-800 shadow-2xl relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-tr from-primary/10 via-transparent to-transparent pointer-events-none" />
+            <CardHeader className="text-center relative z-10">
+              <div className="h-12 w-12 rounded-xl bg-primary/20 flex items-center justify-center text-primary mx-auto mb-4 border border-primary/30">
+                <Clock className="h-6 w-6" />
+              </div>
+              <CardTitle className="text-2xl font-black font-headline text-white">Recuperação de Senha</CardTitle>
+              <CardDescription>Insira os e-mails associados para solicitar a redefinição.</CardDescription>
+            </CardHeader>
+            <CardContent className="relative z-10">
+              <form onSubmit={handlePasswordRecovery} className="space-y-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">E-mail Profissional (equipe)</label>
+                  <input
+                    type="email"
+                    value={recoveryInputEmail}
+                    onChange={(e) => setRecoveryInputEmail(e.target.value)}
+                    placeholder="nome@timevision.com.br"
+                    className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-sm focus:outline-none focus:border-primary text-white"
+                    required
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">E-mail de Recuperação Pessoal Cadastrado</label>
+                  <input
+                    type="email"
+                    value={recoveryInputGmail}
+                    onChange={(e) => setRecoveryInputGmail(e.target.value)}
+                    placeholder="seu.pessoal@gmail.com"
+                    className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-sm focus:outline-none focus:border-primary text-white"
+                    required
+                  />
+                </div>
+                <Button type="submit" className="w-full bg-primary text-primary-foreground hover:bg-primary/90 py-5 font-bold">
+                  Enviar E-mail de Recuperação
+                </Button>
+                <Button 
+                  type="button" 
+                  onClick={() => setIsForgotPassword(false)} 
+                  variant="ghost" 
+                  className="w-full text-slate-400 font-bold"
+                >
+                  Voltar para o Login
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-[80vh] flex items-center justify-center bg-slate-950 p-4">
         <Card className="w-full max-w-md bg-slate-900 border-slate-800 shadow-2xl relative overflow-hidden">
@@ -416,30 +1052,53 @@ export default function AdminPage() {
                   type="email"
                   value={loginEmail}
                   onChange={(e) => setLoginEmail(e.target.value)}
-                  placeholder="admin@timevision.com"
-                  className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-sm focus:outline-none focus:border-primary text-white"
+                  placeholder="admin@timevision.com.br"
+                  className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-sm focus:outline-none focus:border-primary text-white disabled:opacity-50"
                   required
+                  disabled={loginStep === 'password'}
                 />
               </div>
-              <div className="flex flex-col gap-1.5 text-left">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Senha</label>
-                <input
-                  type="password"
-                  value={loginPassword}
-                  onChange={(e) => setLoginPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-sm focus:outline-none focus:border-primary text-white"
-                  required
-                />
-              </div>
+              {loginStep === 'password' && (
+                <div className="flex flex-col gap-1.5 text-left">
+                  <div className="flex justify-between items-center">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Senha</label>
+                    <button 
+                      type="button" 
+                      onClick={() => setIsForgotPassword(true)}
+                      className="text-[10px] text-primary hover:underline font-bold"
+                    >
+                      Esqueceu a senha?
+                    </button>
+                  </div>
+                  <input
+                    type="password"
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-sm focus:outline-none focus:border-primary text-white"
+                    autoFocus
+                  />
+                </div>
+              )}
               <Button type="submit" className="w-full bg-primary text-primary-foreground hover:bg-primary/90 py-5 font-bold">
-                Entrar no Painel
+                {loginStep === 'email' ? 'Continuar' : 'Entrar no Painel'}
               </Button>
+              {loginStep === 'password' && (
+                <Button 
+                  type="button" 
+                  onClick={() => setLoginStep('email')} 
+                  variant="ghost" 
+                  className="w-full text-slate-400 font-bold"
+                >
+                  Voltar
+                </Button>
+              )}
               {process.env.NODE_ENV === 'development' && (
                 <Button 
                   type="button" 
                   onClick={() => {
                     setIsAuthenticated(true);
+                    setCurrentUser({ email: 'admin@timevision.com.br', nome: 'Desenvolvedor' });
                     if (typeof window !== 'undefined') {
                       localStorage.setItem('tv_admin_auth', 'true');
                     }
@@ -458,7 +1117,7 @@ export default function AdminPage() {
             </form>
           </CardContent>
           <div className="p-4 bg-slate-950 border-t border-slate-900 text-[10px] text-center text-slate-500">
-            Senha Padrão local: <span className="text-primary font-bold">timevision123</span>
+            Acesso local: <span className="text-primary font-bold">admin@timevision.com.br</span> | Senha: <span className="text-primary font-bold">timevision123</span>
           </div>
         </Card>
       </div>
@@ -468,7 +1127,7 @@ export default function AdminPage() {
   // Render OS Generator Modal View if active
   if (activeOSVenda) {
     return (
-      <div className="bg-slate-950 min-h-screen py-12 px-4">
+      <div className="bg-slate-950/90 h-screen w-screen fixed inset-0 z-50 flex items-center justify-center p-2 md:p-6 overflow-hidden backdrop-blur-sm">
         <WorkOrderGenerator
           initialVenda={activeOSVenda}
           onClose={() => {
@@ -493,12 +1152,12 @@ export default function AdminPage() {
       {/* HEADER BAR */}
       <div className="px-5 py-4 flex items-center justify-between sticky top-0 z-40" style={{ background: "#161616", borderBottom: `1px solid ${GOLD}20` }}>
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 flex items-center justify-center flex-shrink-0" style={{ background: GOLD }}>
-            <span className="font-display text-brand-graphite font-bold text-sm">TV</span>
+          <div className="w-8 h-8 flex items-center justify-center flex-shrink-0 bg-transparent">
+            <img src="/logos/icone/MARCA D´ÁGUA/icone-no-bg.svg" alt="Timevision Icon" className="w-full h-full object-contain" />
           </div>
           <div>
             <p className="font-tagline text-brand-off-white tracking-widest text-xs uppercase">Painel PDV & Gestão</p>
-            <p className="font-body text-brand-off-white/40 text-[10px]">Timevision Ótica — Módulo Corporativo</p>
+            <p className="font-body text-brand-off-white/40 text-[10px]">Olá, <strong className="text-brand-gold">{currentUser?.nome || 'Consultor'}</strong></p>
           </div>
         </div>
         <div className="flex items-center gap-4">
@@ -522,7 +1181,9 @@ export default function AdminPage() {
             { id: 'pdv', Icon: ShoppingCart, label: "Nova Venda" },
             { id: 'clientes', Icon: Users, label: "Clientes" },
             { id: 'estoque', Icon: Package, label: "Estoque" },
-            { id: 'mkt', Icon: Sparkles, label: "Marketing" }
+            { id: 'eventos', Icon: Calendar, label: "Eventos" },
+            { id: 'mkt', Icon: Sparkles, label: "Marketing" },
+            { id: 'laboratorios', Icon: FlaskConical, label: "Laboratórios" }
           ].map(({ id, Icon, label }) => (
             <button 
               key={id} 
@@ -539,12 +1200,47 @@ export default function AdminPage() {
         </div>
       </div>
 
-      <main className="flex-1 p-6 md:p-8 max-w-7xl mx-auto w-full">
+      <main className="flex-1 p-6 md:p-8 w-full">
         
         {/* TABA 1: DASHBOARD */}
         {activeTab === 'dash' && (
           <div className="space-y-6">
-            <h2 className="text-2xl font-headline font-bold">Visão Geral & Finanças</h2>
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <h2 className="text-2xl font-headline font-bold">Visão Geral & Finanças</h2>
+              <div className="flex flex-wrap gap-3">
+                {/* Vendedor Filter */}
+                <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs">
+                  <span className="text-slate-400">Consultor:</span>
+                  <select
+                    value={selectedVendedorId}
+                    onChange={(e) => setSelectedVendedorId(e.target.value)}
+                    className="bg-transparent border-none text-white focus:outline-none font-bold text-xs cursor-pointer"
+                  >
+                    <option value="todos" className="bg-slate-900">Todos</option>
+                    <option value="admin@timevision.com.br" className="bg-slate-900">Administrador</option>
+                    {equipe.map(member => (
+                      <option key={member.email} value={member.email} className="bg-slate-900">{member.nome}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Event Filter */}
+                <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs">
+                  <span className="text-slate-400">Origem (Evento):</span>
+                  <select
+                    value={selectedEventoId}
+                    onChange={(e) => setSelectedEventoId(e.target.value)}
+                    className="bg-transparent border-none text-white focus:outline-none font-bold text-xs cursor-pointer"
+                  >
+                    <option value="todos" className="bg-slate-900">Todos (Loja + Eventos)</option>
+                    <option value="loja" className="bg-slate-900">Apenas Loja Física</option>
+                    {eventos.map(ev => (
+                      <option key={ev.id} value={ev.id} className="bg-slate-900">{ev.nome}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
             
             {/* Financial Metrics Row */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -585,67 +1281,114 @@ export default function AdminPage() {
               </div>
             )}
 
-            {/* Sales List & Tracker Status Updates */}
-            <Card className="bg-slate-900 border-slate-800 shadow">
-              <CardHeader className="border-b border-slate-800 pb-4">
-                <CardTitle className="text-lg font-bold">Histórico de Pedidos & Rastreamento</CardTitle>
-                <CardDescription>Gerencie o status físico de fabricação dos óculos dos clientes.</CardDescription>
-              </CardHeader>
-              <CardContent className="pt-4 px-0">
-                <div className="overflow-x-auto w-full">
-                  <table className="w-full text-xs text-left border-collapse min-w-[600px]">
-                    <thead>
-                      <tr className="border-b border-slate-800 text-slate-450 uppercase text-[10px] font-bold">
-                        <th className="py-3 px-4">Pedido</th>
-                        <th className="py-3 px-4">Cliente</th>
-                        <th className="py-3 px-4">Itens</th>
-                        <th className="py-3 px-4">Valor</th>
-                        <th className="py-3 px-4">Data</th>
-                        <th className="py-3 px-4 text-center">Status de Confecção</th>
-                        <th className="py-3 px-4 text-right">Ações</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {vendas.map((v) => (
-                        <tr key={v.id} className="border-b border-slate-800/40 hover:bg-slate-800/20 transition-colors">
-                          <td className="py-3 px-4 font-bold text-primary">#{v.id}</td>
-                          <td className="py-3 px-4 font-semibold">{v.clienteNome}</td>
-                          <td className="py-3 px-4 text-slate-400">
-                            {v.produtos.map(p => p.nome).join(' + ')}
-                          </td>
-                          <td className="py-3 px-4 font-black">R$ {v.valorTotal.toFixed(2)}</td>
-                          <td className="py-3 px-4">{new Date(v.dataVenda).toLocaleDateString('pt-BR')}</td>
-                          <td className="py-3 px-4 text-center">
-                            <select
-                              value={v.status}
-                              onChange={(e) => handleUpdateStatus(v.id, e.target.value)}
-                              className="bg-slate-950 border border-slate-800 rounded px-2.5 py-1 text-[11px] text-white focus:outline-none"
-                            >
-                              <option value="orcamento">Orçamento (7 dias)</option>
-                              <option value="recebido">Pedido Recebido</option>
-                              <option value="laboratorio">No Laboratório</option>
-                              <option value="montagem">Em Montagem</option>
-                              <option value="pronto">Pronto p/ Entrega</option>
-                              <option value="entregue">Entregue</option>
-                            </select>
-                          </td>
-                          <td className="py-3 px-4 text-right">
-                            <Button 
-                              onClick={() => setActiveOSVenda(v)}
-                              size="sm" 
-                              variant="ghost" 
-                              className="h-8 text-primary hover:text-primary gap-1"
-                            >
-                              <Eye className="h-3.5 w-3.5" /> {v.status === 'orcamento' ? 'Re-gerar Orçamento' : 'Re-gerar O.S.'}
-                            </Button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+            {/* Kanban Board & Batch Updater */}
+            <div className="space-y-4">
+              <div className="flex flex-col md:flex-row gap-4 items-end bg-slate-900 border border-slate-800 p-4 rounded-xl shadow">
+                <div className="flex-1 w-full">
+                  <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 block">Atualização em Lote (Insira os números dos pedidos)</label>
+                  <input
+                    type="text"
+                    value={batchOrderIds}
+                    onChange={(e) => setBatchOrderIds(e.target.value)}
+                    placeholder="Ex: 1001, 1002, 1005"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-primary"
+                  />
                 </div>
-              </CardContent>
-            </Card>
+                <div className="w-full md:w-48">
+                  <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 block">Novo Status</label>
+                  <select
+                    value={batchStatus}
+                    onChange={(e) => setBatchStatus(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-primary"
+                  >
+                    <option value="orcamento">Orçamento (7 dias)</option>
+                    <option value="recebido">Pedido Recebido</option>
+                    <option value="laboratorio">No Laboratório</option>
+                    <option value="montagem">Em Montagem</option>
+                    <option value="pronto">Pronto p/ Entrega</option>
+                    <option value="entregue">Entregue</option>
+                    <option value="cancelado">Cancelado</option>
+                  </select>
+                </div>
+                <Button onClick={handleBatchUpdate} className="w-full md:w-auto bg-primary text-primary-foreground font-bold">
+                  Atualizar Todos
+                </Button>
+              </div>
+
+              <div className="flex gap-4 overflow-x-auto pb-4 snap-x">
+                {[
+                  { id: 'orcamento', label: 'Orçamento', color: 'border-slate-500 text-slate-400' },
+                  { id: 'recebido', label: 'Recebido', color: 'border-blue-500 text-blue-400' },
+                  { id: 'laboratorio', label: 'Laboratório', color: 'border-amber-500 text-amber-400' },
+                  { id: 'montagem', label: 'Montagem', color: 'border-purple-500 text-purple-400' },
+                  { id: 'pronto', label: 'Pronto', color: 'border-green-500 text-green-400' },
+                  { id: 'entregue', label: 'Entregue', color: 'border-emerald-500 text-emerald-400' },
+                  { id: 'cancelado', label: 'Cancelado', color: 'border-red-500 text-red-400' }
+                ].map(col => {
+                  const colOrders = vendas.filter(v => {
+                    if (v.status !== col.id) return false;
+                    if (selectedVendedorId !== 'todos' && v.vendedorId !== selectedVendedorId) return false;
+                    if (selectedEventoId !== 'todos') {
+                      if (selectedEventoId === 'loja' && v.eventoId) return false;
+                      if (selectedEventoId !== 'loja' && v.eventoId !== selectedEventoId) return false;
+                    }
+                    return true;
+                  });
+
+                  return (
+                    <div 
+                      key={col.id} 
+                      className="min-w-[160px] max-w-[280px] flex-1 flex-shrink-0 bg-slate-900/50 rounded-xl border border-slate-800 flex flex-col snap-center"
+                      onDragOver={handleDragOver}
+                      onDrop={(e) => handleDrop(e, col.id)}
+                    >
+                      <div className={`p-3 border-b-2 ${col.color} bg-slate-900 rounded-t-xl flex justify-between items-center`}>
+                        <h3 className="font-bold text-xs uppercase tracking-wider">{col.label}</h3>
+                        <span className="bg-slate-800 text-[10px] py-0.5 px-2 rounded-full font-bold">{colOrders.length}</span>
+                      </div>
+                      <div className="p-2 flex-1 overflow-y-auto space-y-2 max-h-[600px] min-h-[150px]">
+                        {colOrders.map(v => (
+                          <div 
+                            key={v.id}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, v.id)}
+                            className="bg-slate-950 p-3 rounded-lg border border-slate-800 cursor-grab active:cursor-grabbing hover:border-slate-600 transition-colors relative"
+                          >
+                            <div className="flex justify-between items-start mb-2">
+                              <span className="font-black text-primary text-sm">#{v.id}</span>
+                              <Button 
+                                onClick={() => setActiveOSVenda(v)}
+                                size="sm" 
+                                variant="ghost" 
+                                className="h-6 w-6 p-0 text-slate-400 hover:text-primary"
+                                title="Visualizar O.S."
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                            <div className="font-bold text-sm text-slate-200 truncate" title={v.clienteNome}>{v.clienteNome}</div>
+                            <div className="text-[10px] text-slate-400 mt-1 uppercase">Lab: <span className="font-bold text-slate-300">{v.laboratorioNome || 'Não definido'}</span></div>
+                            <div className="text-[10px] text-slate-400 uppercase">Valor: <span className="font-bold text-slate-300">R$ {v.valorTotal.toFixed(2)}</span></div>
+                            <div className="text-[10px] text-slate-500 mt-1">{new Date(v.dataVenda).toLocaleDateString('pt-BR')}</div>
+                            
+                            {v.eventoId && (
+                              <span className="absolute bottom-2 right-2 text-[8px] uppercase tracking-wider bg-primary/10 text-primary border border-primary/30 px-1.5 py-0.5 rounded font-bold">
+                                Ev: {eventos.find(ev => ev.id === v.eventoId)?.nome || 'Promocional'}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                        {colOrders.length === 0 && (
+                          <div className="text-center py-6 text-[10px] uppercase text-slate-500 font-bold border-2 border-dashed border-slate-800/50 rounded-lg h-full flex items-center justify-center">
+                            Vazio
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         )}
 
@@ -686,6 +1429,34 @@ export default function AdminPage() {
                     </div>
 
                     <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Vincular a Evento</label>
+                      <select
+                        value={pdvEventoId}
+                        onChange={(e) => setPdvEventoId(e.target.value)}
+                        className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-sm text-white focus:outline-none"
+                      >
+                        <option value="">Nenhum evento...</option>
+                        {eventos.filter(ev => ev.status === 'ativo').map(ev => (
+                          <option key={ev.id} value={ev.id}>{ev.nome}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Laboratório</label>
+                      <select
+                        value={pdvLaboratorioId}
+                        onChange={(e) => setPdvLaboratorioId(e.target.value)}
+                        className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-sm text-white focus:outline-none"
+                      >
+                        <option value="">Nenhum...</option>
+                        {laboratorios.map(lab => (
+                          <option key={lab.id} value={lab.id}>{lab.nome}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
                       <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Selecionar Armação</label>
                       <select
                         value={pdvFrameId}
@@ -716,77 +1487,78 @@ export default function AdminPage() {
 
                   {/* Eyeglass Prescription (Receita) */}
                   <div className="border-t border-slate-800 pt-4">
-                    <h4 className="text-xs font-bold text-primary uppercase tracking-wider mb-4">Cadastrar Receita de Visão (Para O.S.)</h4>
-                    
-                    <div className="grid grid-cols-4 gap-4 text-[10px] uppercase font-bold text-slate-400 text-center mb-1">
-                      <div>Olho</div>
-                      <div>Esférico</div>
-                      <div>Cilíndrico</div>
-                      <div>Eixo</div>
+                      <h4 className="text-xs font-bold text-primary uppercase tracking-wider mb-4">Cadastrar Receita de Visão (Para O.S.)</h4>
+
+                    <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 mb-3">
+                      <div className="text-[10px] uppercase font-bold text-slate-300 mb-2 border-b border-slate-800 pb-1">Medidas para Longe</div>
+                      <div className="grid grid-cols-[auto_1fr_1fr_1fr_1fr_1fr] gap-2 text-[10px] uppercase font-bold text-slate-500 text-center mb-2">
+                        <div className="text-left">Olho</div>
+                        <div>Esférico</div>
+                        <div>Cilíndrico</div>
+                        <div>Eixo</div>
+                        <div>DNP</div>
+                        <div>Altura</div>
+                      </div>
+                      
+                      <div className="grid grid-cols-[auto_1fr_1fr_1fr_1fr_1fr] gap-2 items-center mb-2">
+                        <span className="text-[10px] font-bold text-slate-400 w-8">O.D.</span>
+                        <input type="text" value={pdvLongeEsfOD} onChange={(e) => setPdvLongeEsfOD(e.target.value)} placeholder="0.00" className="bg-slate-900 border border-slate-700 rounded p-1.5 text-center text-xs text-white" />
+                        <input type="text" value={pdvLongeCilOD} onChange={(e) => setPdvLongeCilOD(e.target.value)} placeholder="0.00" className="bg-slate-900 border border-slate-700 rounded p-1.5 text-center text-xs text-white" />
+                        <input type="text" value={pdvLongeEixoOD} onChange={(e) => setPdvLongeEixoOD(e.target.value)} placeholder="Ex: 90" className="bg-slate-900 border border-slate-700 rounded p-1.5 text-center text-xs text-white" />
+                        <input type="text" value={pdvLongeDnpOD} onChange={(e) => setPdvLongeDnpOD(e.target.value)} placeholder="DNP" className="bg-slate-900 border border-slate-700 rounded p-1.5 text-center text-xs text-white" />
+                        <input type="text" value={pdvLongeAlturaOD} onChange={(e) => setPdvLongeAlturaOD(e.target.value)} placeholder="Alt" className="bg-slate-900 border border-slate-700 rounded p-1.5 text-center text-xs text-white" />
+                      </div>
+                      <div className="grid grid-cols-[auto_1fr_1fr_1fr_1fr_1fr] gap-2 items-center">
+                        <span className="text-[10px] font-bold text-slate-400 w-8">O.E.</span>
+                        <input type="text" value={pdvLongeEsfOE} onChange={(e) => setPdvLongeEsfOE(e.target.value)} placeholder="0.00" className="bg-slate-900 border border-slate-700 rounded p-1.5 text-center text-xs text-white" />
+                        <input type="text" value={pdvLongeCilOE} onChange={(e) => setPdvLongeCilOE(e.target.value)} placeholder="0.00" className="bg-slate-900 border border-slate-700 rounded p-1.5 text-center text-xs text-white" />
+                        <input type="text" value={pdvLongeEixoOE} onChange={(e) => setPdvLongeEixoOE(e.target.value)} placeholder="Ex: 85" className="bg-slate-900 border border-slate-700 rounded p-1.5 text-center text-xs text-white" />
+                        <input type="text" value={pdvLongeDnpOE} onChange={(e) => setPdvLongeDnpOE(e.target.value)} placeholder="DNP" className="bg-slate-900 border border-slate-700 rounded p-1.5 text-center text-xs text-white" />
+                        <input type="text" value={pdvLongeAlturaOE} onChange={(e) => setPdvLongeAlturaOE(e.target.value)} placeholder="Alt" className="bg-slate-900 border border-slate-700 rounded p-1.5 text-center text-xs text-white" />
+                      </div>
                     </div>
 
-                    {/* OD Row */}
-                    <div className="grid grid-cols-4 gap-4 items-center mb-3">
-                      <span className="text-xs font-bold text-slate-350">Olho Direito (OD)</span>
-                      <input
-                        type="text"
-                        value={pdvEsfOD}
-                        onChange={(e) => setPdvEsfOD(e.target.value)}
-                        placeholder="0.00"
-                        className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-center text-sm text-white focus:outline-none"
-                      />
-                      <input
-                        type="text"
-                        value={pdvCilOD}
-                        onChange={(e) => setPdvCilOD(e.target.value)}
-                        placeholder="0.00"
-                        className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-center text-sm text-white focus:outline-none"
-                      />
-                      <input
-                        type="text"
-                        value={pdvEixoOD}
-                        onChange={(e) => setPdvEixoOD(e.target.value)}
-                        placeholder="Ex: 90"
-                        className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-center text-sm text-white focus:outline-none"
-                      />
+                    <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 mb-3">
+                      <div className="text-[10px] uppercase font-bold text-slate-300 mb-2 border-b border-slate-800 pb-1">Medidas para Perto</div>
+                      <div className="grid grid-cols-[auto_1fr_1fr_1fr_1fr_1fr] gap-2 items-center mb-2">
+                        <span className="text-[10px] font-bold text-slate-400 w-8">O.D.</span>
+                        <input type="text" value={pdvPertoEsfOD} onChange={(e) => setPdvPertoEsfOD(e.target.value)} placeholder="0.00" className="bg-slate-900 border border-slate-700 rounded p-1.5 text-center text-xs text-white" />
+                        <input type="text" value={pdvPertoCilOD} onChange={(e) => setPdvPertoCilOD(e.target.value)} placeholder="0.00" className="bg-slate-900 border border-slate-700 rounded p-1.5 text-center text-xs text-white" />
+                        <input type="text" value={pdvPertoEixoOD} onChange={(e) => setPdvPertoEixoOD(e.target.value)} placeholder="Ex: 90" className="bg-slate-900 border border-slate-700 rounded p-1.5 text-center text-xs text-white" />
+                        <input type="text" value={pdvPertoDnpOD} onChange={(e) => setPdvPertoDnpOD(e.target.value)} placeholder="DNP" className="bg-slate-900 border border-slate-700 rounded p-1.5 text-center text-xs text-white" />
+                        <input type="text" value={pdvPertoAlturaOD} onChange={(e) => setPdvPertoAlturaOD(e.target.value)} placeholder="Alt" className="bg-slate-900 border border-slate-700 rounded p-1.5 text-center text-xs text-white" />
+                      </div>
+                      <div className="grid grid-cols-[auto_1fr_1fr_1fr_1fr_1fr] gap-2 items-center">
+                        <span className="text-[10px] font-bold text-slate-400 w-8">O.E.</span>
+                        <input type="text" value={pdvPertoEsfOE} onChange={(e) => setPdvPertoEsfOE(e.target.value)} placeholder="0.00" className="bg-slate-900 border border-slate-700 rounded p-1.5 text-center text-xs text-white" />
+                        <input type="text" value={pdvPertoCilOE} onChange={(e) => setPdvPertoCilOE(e.target.value)} placeholder="0.00" className="bg-slate-900 border border-slate-700 rounded p-1.5 text-center text-xs text-white" />
+                        <input type="text" value={pdvPertoEixoOE} onChange={(e) => setPdvPertoEixoOE(e.target.value)} placeholder="Ex: 85" className="bg-slate-900 border border-slate-700 rounded p-1.5 text-center text-xs text-white" />
+                        <input type="text" value={pdvPertoDnpOE} onChange={(e) => setPdvPertoDnpOE(e.target.value)} placeholder="DNP" className="bg-slate-900 border border-slate-700 rounded p-1.5 text-center text-xs text-white" />
+                        <input type="text" value={pdvPertoAlturaOE} onChange={(e) => setPdvPertoAlturaOE(e.target.value)} placeholder="Alt" className="bg-slate-900 border border-slate-700 rounded p-1.5 text-center text-xs text-white" />
+                      </div>
                     </div>
 
-                    {/* OE Row */}
-                    <div className="grid grid-cols-4 gap-4 items-center mb-4">
-                      <span className="text-xs font-bold text-slate-350">Olho Esquerdo (OE)</span>
-                      <input
-                        type="text"
-                        value={pdvEsfOE}
-                        onChange={(e) => setPdvEsfOE(e.target.value)}
-                        placeholder="0.00"
-                        className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-center text-sm text-white focus:outline-none"
-                      />
-                      <input
-                        type="text"
-                        value={pdvCilOE}
-                        onChange={(e) => setPdvCilOE(e.target.value)}
-                        placeholder="0.00"
-                        className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-center text-sm text-white focus:outline-none"
-                      />
-                      <input
-                        type="text"
-                        value={pdvEixoOE}
-                        onChange={(e) => setPdvEixoOE(e.target.value)}
-                        placeholder="Ex: 85"
-                        className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-center text-sm text-white focus:outline-none"
-                      />
-                    </div>
-
-                    {/* Addition */}
-                    <div className="flex flex-col gap-1 max-w-[200px]">
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Adição (Para Perto)</label>
-                      <input
-                        type="text"
-                        value={pdvAdicao}
-                        onChange={(e) => setPdvAdicao(e.target.value)}
-                        placeholder="Ex: +2.00"
-                        className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-white focus:outline-none"
-                      />
+                    <div className="flex flex-col sm:flex-row gap-4">
+                      <div className="flex flex-col gap-1 w-full sm:max-w-[200px]">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Adição</label>
+                        <input
+                          type="text"
+                          value={pdvAdicao}
+                          onChange={(e) => setPdvAdicao(e.target.value)}
+                          placeholder="Ex: +2.00"
+                          className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-white focus:outline-none"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1 w-full sm:max-w-[200px]">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Código da Lente (Lab)</label>
+                        <input
+                          type="text"
+                          value={pdvCodigoLente}
+                          onChange={(e) => setPdvCodigoLente(e.target.value)}
+                          placeholder="Ref/Código"
+                          className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-white focus:outline-none"
+                        />
+                      </div>
                     </div>
                   </div>
 
@@ -893,10 +1665,16 @@ export default function AdminPage() {
                           <span className="font-bold text-primary uppercase text-[9px] block mb-1">Última Receita ({customerPrescriptions[0].id})</span>
                           <div className="grid grid-cols-4 gap-1 text-[10px] text-center">
                             <span className="text-left font-bold text-slate-400">Olho</span><span>ESF</span><span>CIL</span><span>EIXO</span>
-                            <span className="text-left font-semibold">OD</span>
-                            <span>{customerPrescriptions[0].receita.esfericoOD}</span>
-                            <span>{customerPrescriptions[0].receita.cilindricoOD}</span>
-                            <span>{customerPrescriptions[0].receita.eixoOD || '-'}</span>
+                            <span className="text-left font-semibold">OD Longe</span>
+                            <span>{customerPrescriptions[0].receita?.longeEsfericoOD || customerPrescriptions[0].receita?.esfericoOD}</span>
+                            <span>{customerPrescriptions[0].receita?.longeCilindricoOD || customerPrescriptions[0].receita?.cilindricoOD}</span>
+                            <span>{customerPrescriptions[0].receita?.longeEixoOD || customerPrescriptions[0].receita?.eixoOD || '-'}</span>
+                          </div>
+                          <div className="grid grid-cols-4 gap-2 text-center text-[10px] items-center mt-1">
+                            <span className="text-left font-semibold">OE Longe</span>
+                            <span>{customerPrescriptions[0].receita?.longeEsfericoOE || customerPrescriptions[0].receita?.esfericoOE}</span>
+                            <span>{customerPrescriptions[0].receita?.longeCilindricoOE || customerPrescriptions[0].receita?.cilindricoOE}</span>
+                            <span>{customerPrescriptions[0].receita?.longeEixoOE || customerPrescriptions[0].receita?.eixoOE || '-'}</span>
                           </div>
                         </div>
                       )}
@@ -1118,6 +1896,239 @@ export default function AdminPage() {
           </div>
         )}
 
+        {/* TABA 6: EVENTOS */}
+        {activeTab === 'eventos' && (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <h2 className="text-2xl font-headline font-bold">Gestão de Eventos Promocionais</h2>
+                <p className="text-xs text-slate-400">Configure ações sociais, feiras e visualize leads inscritos.</p>
+              </div>
+              <Button 
+                onClick={() => {
+                  setEditingEvento(null);
+                  setIsEventModalOpen(true);
+                }} 
+                className="bg-primary text-primary-foreground hover:bg-primary/90 font-bold flex items-center gap-1.5"
+              >
+                <Plus className="h-4 w-4" /> Novo Evento
+              </Button>
+            </div>
+
+            {/* Event list */}
+            <div className="grid grid-cols-1 gap-6">
+              {eventos.map((ev) => {
+                const eventLeads = leads.filter(l => l.eventoId === ev.id);
+                const eventSales = vendas.filter(v => v.eventoId === ev.id && v.status !== 'orcamento');
+                const eventRevenue = eventSales.reduce((sum, current) => sum + current.valorTotal, 0);
+                
+                // Construct subscription landing page URL
+                const landingPageUrl = typeof window !== 'undefined' 
+                  ? `${window.location.origin}/inscricao-evento?evento=${ev.id}`
+                  : `/inscricao-evento?evento=${ev.id}`;
+
+                return (
+                  <Card key={ev.id} className={`bg-slate-900 border-slate-800 shadow-md ${ev.status === 'arquivado' ? 'opacity-65' : ''}`}>
+                    <CardHeader className="pb-3 border-b border-slate-800 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <CardTitle className="text-lg font-bold">{ev.nome}</CardTitle>
+                          <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                            ev.status === 'ativo' ? 'bg-green-950 text-green-400 border border-green-900/30' : 'bg-slate-950 text-slate-450 border border-slate-800'
+                          }`}>
+                            {ev.status === 'ativo' ? 'Ativo' : 'Arquivado'}
+                          </span>
+                        </div>
+                        <CardDescription className="text-xs text-slate-450 mt-1 flex flex-wrap gap-x-4 gap-y-1">
+                          <span>Data: {new Date(ev.data).toLocaleDateString('pt-BR')}</span>
+                          <span>Local: {ev.local}</span>
+                          {ev.criadoPor && <span>Criado por: {ev.criadoPor}</span>}
+                        </CardDescription>
+                      </div>
+                      
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            navigator.clipboard.writeText(landingPageUrl);
+                            toast({ title: 'Link Copiado!', description: 'Link de inscrição copiado para a área de transferência.' });
+                          }}
+                          className="border-slate-800 text-slate-350 hover:bg-slate-800 text-[10px] py-1 px-2.5 font-semibold"
+                        >
+                          Copiar Link de Inscrição
+                        </Button>
+                        <Button 
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setEditingEvento(ev);
+                            setIsEventModalOpen(true);
+                          }}
+                          className="border-slate-800 text-slate-350 hover:bg-slate-800 text-[10px] py-1 px-2.5 font-semibold"
+                        >
+                          Editar
+                        </Button>
+                        <Button 
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleArchiveEvento(ev)}
+                          className="border-slate-800 text-slate-350 hover:bg-slate-800 text-[10px] py-1 px-2.5 font-semibold"
+                        >
+                          {ev.status === 'ativo' ? 'Arquivar' : 'Reativar'}
+                        </Button>
+                        <Button 
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleDeleteEvento(ev.id)}
+                          className="text-red-400 hover:bg-red-950/20 hover:text-red-300 text-[10px] py-1 px-2.5 font-semibold"
+                        >
+                          Excluir
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    
+                    <CardContent className="pt-4 space-y-4">
+                      {/* Metric cards for the event */}
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                        <div className="bg-slate-950 p-3 rounded-lg border border-slate-800/40">
+                          <span className="text-[10px] uppercase font-bold text-slate-450 block">Inscrições (Leads)</span>
+                          <span className="text-xl font-black text-white">{eventLeads.length}</span>
+                        </div>
+                        <div className="bg-slate-950 p-3 rounded-lg border border-slate-800/40">
+                          <span className="text-[10px] uppercase font-bold text-slate-450 block">Conversões em Venda</span>
+                          <span className="text-xl font-black text-white">{eventSales.length}</span>
+                        </div>
+                        <div className="bg-slate-950 p-3 rounded-lg border border-slate-800/40 col-span-2 sm:col-span-1">
+                          <span className="text-[10px] uppercase font-bold text-slate-450 block text-primary">Receita Gerada</span>
+                          <span className="text-xl font-black text-primary">R$ {eventRevenue.toFixed(2)}</span>
+                        </div>
+                      </div>
+
+                      {/* Lead Lists */}
+                      <div>
+                        <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                          <Users size={12} className="text-primary" /> Leads Cadastrados
+                        </h4>
+                        
+                        {eventLeads.length === 0 ? (
+                          <p className="text-xs text-slate-500 italic py-2">Nenhum lead se cadastrou neste evento ainda.</p>
+                        ) : (
+                          <div className="overflow-x-auto border border-slate-800 rounded-lg">
+                            <table className="w-full text-[11px] text-left border-collapse">
+                              <thead>
+                                <tr className="border-b border-slate-800 bg-slate-950/60 text-slate-400 font-bold uppercase text-[9px]">
+                                  <th className="py-2 px-3">Nome</th>
+                                  <th className="py-2 px-3">WhatsApp</th>
+                                  <th className="py-2 px-3">E-mail</th>
+                                  <th className="py-2 px-3">Necessidade</th>
+                                  <th className="py-2 px-3 text-right">Data Inscrição</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {eventLeads.map((lead, idx) => (
+                                  <tr key={idx} className="border-b border-slate-800/30 hover:bg-slate-850/30">
+                                    <td className="py-2 px-3 font-semibold text-slate-200">{lead.nome}</td>
+                                    <td className="py-2 px-3 text-slate-350">{lead.whatsapp}</td>
+                                    <td className="py-2 px-3 text-slate-350">{lead.email}</td>
+                                    <td className="py-2 px-3">
+                                      <span className="px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 text-[9px] font-bold uppercase">
+                                        {lead.exame}
+                                      </span>
+                                    </td>
+                                    <td className="py-2 px-3 text-right text-slate-500">
+                                      {lead.criadoEm ? new Date(lead.criadoEm).toLocaleDateString('pt-BR') : '-'}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+
+              {eventos.length === 0 && (
+                <div className="text-center py-12 bg-slate-900 border border-slate-800 rounded-xl">
+                  <Calendar className="h-12 w-12 text-slate-650 mx-auto mb-3" />
+                  <h3 className="text-sm font-bold text-slate-300">Nenhum Evento Configurado</h3>
+                  <p className="text-xs text-slate-500 mt-1">Crie um evento acima para começar a registrar leads.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Event Creation Modal */}
+            {isEventModalOpen && (
+              <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <Card className="w-full max-w-md bg-slate-900 border-slate-800 shadow-2xl">
+                  <CardHeader>
+                    <CardTitle className="text-xl font-bold">{editingEvento ? 'Editar Evento' : 'Configurar Novo Evento'}</CardTitle>
+                    <CardDescription>Insira as informações do evento para geração de landing page e banners.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <form onSubmit={handleSaveEvento} className="space-y-4">
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[10px] font-bold uppercase text-slate-400">Nome do Evento</label>
+                        <input
+                          type="text"
+                          name="nome"
+                          defaultValue={editingEvento?.nome || ''}
+                          placeholder="Ex: Ação Social Paróquia São Jorge"
+                          className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-primary"
+                          required
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[10px] font-bold uppercase text-slate-400">Data do Evento</label>
+                          <input
+                            type="date"
+                            name="data"
+                            defaultValue={editingEvento?.data || ''}
+                            className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-primary"
+                            required
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[10px] font-bold uppercase text-slate-400">Local</label>
+                          <input
+                            type="text"
+                            name="local"
+                            defaultValue={editingEvento?.local || ''}
+                            placeholder="Ex: Nilópolis, RJ"
+                            className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-primary"
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex gap-3 pt-4 border-t border-slate-800">
+                        <Button type="submit" className="flex-1 bg-primary text-primary-foreground font-bold">
+                          {editingEvento ? 'Salvar Alterações' : 'Criar Evento'}
+                        </Button>
+                        <Button 
+                          type="button" 
+                          variant="outline" 
+                          onClick={() => {
+                            setIsEventModalOpen(false);
+                            setEditingEvento(null);
+                          }}
+                          className="border-slate-800 text-slate-400"
+                        >
+                          Cancelar
+                        </Button>
+                      </div>
+                    </form>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Client Modal (Globally Accessible) */}
         {isClientModalOpen && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -1162,6 +2173,16 @@ export default function AdminPage() {
                     </div>
                   </div>
                   <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-bold uppercase text-slate-400">Data de Nascimento</label>
+                    <input
+                      type="date"
+                      name="dataNascimento"
+                      defaultValue={editingCliente?.dataNascimento || ''}
+                      className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-white"
+                      required
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
                     <label className="text-[10px] font-bold uppercase text-slate-400">E-mail</label>
                     <input
                       type="email"
@@ -1170,14 +2191,47 @@ export default function AdminPage() {
                       className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-white"
                     />
                   </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-bold uppercase text-slate-400">Endereço Completo</label>
-                    <input
-                      type="text"
-                      name="endereco"
-                      defaultValue={editingCliente?.endereco || ''}
-                      className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-white"
-                    />
+                  <div className="grid grid-cols-[1fr_2fr] gap-4">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-bold uppercase text-slate-400">CEP</label>
+                      <input
+                        type="text"
+                        name="cep"
+                        id="cep-input"
+                        placeholder="00000-000"
+                        defaultValue={editingCliente?.cep || ''}
+                        className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-white"
+                        required
+                        onBlur={async (e) => {
+                          const cep = e.target.value.replace(/\D/g, '');
+                          if (cep.length === 8) {
+                            try {
+                              const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+                              const data = await res.json();
+                              if (!data.erro) {
+                                const enderecoInput = document.getElementById('endereco-input') as HTMLInputElement;
+                                if (enderecoInput) {
+                                  enderecoInput.value = `${data.logradouro}, , ${data.bairro}, ${data.localidade} - ${data.uf}`;
+                                }
+                              }
+                            } catch (error) {
+                              console.error('Erro ao buscar CEP', error);
+                            }
+                          }
+                        }}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-bold uppercase text-slate-400">Endereço Completo</label>
+                      <input
+                        type="text"
+                        name="endereco"
+                        id="endereco-input"
+                        defaultValue={editingCliente?.endereco || ''}
+                        className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-white"
+                        required
+                      />
+                    </div>
                   </div>
 
                   <div className="flex gap-3 pt-4 border-t border-slate-800">
@@ -1198,6 +2252,11 @@ export default function AdminPage() {
               </CardContent>
             </Card>
           </div>
+        )}
+
+        {/* TABA 7: LABORATÓRIOS */}
+        {activeTab === 'laboratorios' && (
+          <LaboratoriosManager />
         )}
 
       </main>

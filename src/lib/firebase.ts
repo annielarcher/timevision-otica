@@ -46,8 +46,11 @@ export interface Cliente {
   cpf: string;
   email: string;
   telefone: string;
+  cep: string;
   endereco: string;
+  dataNascimento: string;
   criadoEm: string;
+  cadastradoPor?: string; // Tracks team member email
 }
 
 export interface Produto {
@@ -57,16 +60,50 @@ export interface Produto {
   quantidade: number;
   precoCusto: number;
   precoVenda: number;
+  criadoPor?: string; // Tracks team member email
 }
 
 export interface ReceitaVisual {
-  esfericoOD: string;
-  esfericoOE: string;
-  cilindricoOD: string;
-  cilindricoOE: string;
-  eixoOD: string;
-  eixoOE: string;
-  adicao: string;
+  dataReceita?: string; // Obrigatório nas novas
+  
+  // LONGE
+  longeEsfericoOD?: string;
+  longeEsfericoOE?: string;
+  longeCilindricoOD?: string;
+  longeCilindricoOE?: string;
+  longeEixoOD?: string;
+  longeEixoOE?: string;
+  longeDnpOD?: string;
+  longeDnpOE?: string;
+  longeAlturaOD?: string;
+  longeAlturaOE?: string;
+
+  // PERTO
+  pertoEsfericoOD?: string;
+  pertoEsfericoOE?: string;
+  pertoCilindricoOD?: string;
+  pertoCilindricoOE?: string;
+  pertoEixoOD?: string;
+  pertoEixoOE?: string;
+  pertoDnpOD?: string;
+  pertoDnpOE?: string;
+  pertoAlturaOD?: string;
+  pertoAlturaOE?: string;
+
+  adicao?: string;
+  codigoLente?: string;
+
+  // LEGACY
+  esfericoOD?: string;
+  esfericoOE?: string;
+  cilindricoOD?: string;
+  cilindricoOE?: string;
+  eixoOD?: string;
+  eixoOE?: string;
+  dnpOD?: string;
+  dnpOE?: string;
+  alturaOD?: string;
+  alturaOE?: string;
 }
 
 export interface Venda {
@@ -87,10 +124,60 @@ export interface Venda {
   valorTotal: number;
   custoTotal: number;
   lucroTotal: number;
-  receita: ReceitaVisual;
-  status: 'recebido' | 'laboratorio' | 'montagem' | 'pronto' | 'entregue' | 'orcamento';
+  receita?: ReceitaVisual;
+  status: 'recebido' | 'laboratorio' | 'montagem' | 'pronto' | 'entregue' | 'orcamento' | 'cancelado';
   dataVenda: string;
+  dataEntrega?: string;
+  pagamento?: {
+    metodo: string;
+    parcelas: string;
+    sinal: number;
+    pagamentoNaEntrega?: boolean;
+  };
   validadeOrcamento?: string;
+  vendedorId?: string; // Tracks team member email
+  vendedorNome?: string; // Tracks team member name
+  eventoId?: string; // Linked promotional event ID
+  laboratorioId?: string;
+  laboratorioNome?: string;
+}
+
+export interface LenteLaboratorio {
+  id: string;
+  nome: string;
+  valorBase: number;
+  multiplicadorCusto: number;
+  multiplicadorVenda: number;
+  precoCusto: number;
+  precoVenda: number;
+}
+
+export interface Laboratorio {
+  id: string;
+  nome: string;
+  telefone?: string;
+  endereco?: string;
+  representante?: string;
+  lentes: LenteLaboratorio[];
+  criadoEm: string;
+}
+
+export interface Evento {
+  id: string;
+  nome: string;
+  data: string;
+  local: string;
+  status: 'ativo' | 'arquivado';
+  criadoEm: string;
+  criadoPor?: string; // Team member email
+}
+
+export interface MembroEquipe {
+  email: string;
+  nome: string;
+  emailRecuperacao?: string;
+  primeiroAcessoDone: boolean;
+  criadoEm: string;
 }
 
 // Helper generic database actions with localStorage fallback
@@ -115,19 +202,22 @@ export async function getItems<T>(collectionName: string): Promise<T[]> {
   return [];
 }
 
-export async function saveItem<T extends { id: string }>(collectionName: string, item: T): Promise<void> {
+export async function saveItem<T extends { id?: string; email?: string }>(collectionName: string, item: T): Promise<void> {
+  const documentId = item.id || item.email;
+  if (!documentId) throw new Error('Item must have an id or email to be saved');
+  
   if (isFirebaseConfigured && db && auth?.currentUser) {
     try {
-      await setDoc(doc(db, collectionName, item.id), item);
+      await setDoc(doc(db, collectionName, documentId), item);
       return;
     } catch (e) {
-      console.error(`Firebase error saving ${collectionName}/${item.id}, falling back to localStorage:`, e);
+      console.error(`Firebase error saving ${collectionName}/${documentId}, falling back to localStorage:`, e);
     }
   }
 
   if (typeof window !== 'undefined') {
     const items = await getItems<T>(collectionName);
-    const index = items.findIndex((i) => i.id === item.id);
+    const index = items.findIndex((i) => (i.id || i.email) === documentId);
     if (index >= 0) {
       items[index] = item;
     } else {
@@ -148,8 +238,8 @@ export async function deleteItem(collectionName: string, id: string): Promise<vo
   }
 
   if (typeof window !== 'undefined') {
-    const items = await getItems<{ id: string }>(collectionName);
-    const filtered = items.filter((i) => i.id !== id);
+    const items = await getItems<{ id?: string; email?: string }>(collectionName);
+    const filtered = items.filter((i) => (i.id || i.email) !== id);
     localStorage.setItem(`tv_${collectionName}`, JSON.stringify(filtered));
   }
 }
@@ -165,8 +255,8 @@ export async function updateItemStatus(collectionName: string, id: string, statu
   }
 
   if (typeof window !== 'undefined') {
-    const items = await getItems<{ id: string; status?: string }>(collectionName);
-    const index = items.findIndex((i) => i.id === id);
+    const items = await getItems<{ id?: string; email?: string; status?: string }>(collectionName);
+    const index = items.findIndex((i) => (i.id || i.email) === id);
     if (index >= 0) {
       items[index].status = status;
       localStorage.setItem(`tv_${collectionName}`, JSON.stringify(items));
@@ -174,12 +264,13 @@ export async function updateItemStatus(collectionName: string, id: string, statu
   }
 }
 
-export async function getItemById<T extends { id: string }>(collectionName: string, id: string): Promise<T | null> {
+export async function getItemById<T extends { id?: string; email?: string }>(collectionName: string, id: string): Promise<T | null> {
   if (isFirebaseConfigured && db && auth?.currentUser) {
     try {
       const docSnap = await getDoc(doc(db, collectionName, id));
       if (docSnap.exists()) {
-        return { id: docSnap.id, ...docSnap.data() } as T;
+        const data = docSnap.data();
+        return { id: docSnap.id, ...data } as T;
       }
       return null;
     } catch (e) {
@@ -189,8 +280,26 @@ export async function getItemById<T extends { id: string }>(collectionName: stri
 
   if (typeof window !== 'undefined') {
     const items = await getItems<T>(collectionName);
-    const found = items.find((i) => i.id === id);
+    const found = items.find((i) => (i.id || i.email) === id);
     return found || null;
   }
   return null;
+}
+
+export async function saveLead(lead: { nome: string; whatsapp: string; email: string; exame: string; criadoEm: string; eventoId?: string }): Promise<void> {
+  if (isFirebaseConfigured && db) {
+    try {
+      await setDoc(doc(db, 'inscricoes', `lead-${Date.now()}`), lead);
+      return;
+    } catch (e) {
+      console.error('Firebase error saving lead, falling back to localStorage:', e);
+    }
+  }
+  
+  if (typeof window !== 'undefined') {
+    const local = localStorage.getItem('tv_inscricoes');
+    const items = local ? JSON.parse(local) : [];
+    items.push({ id: `lead-${Date.now()}`, ...lead });
+    localStorage.setItem('tv_inscricoes', JSON.stringify(items));
+  }
 }
