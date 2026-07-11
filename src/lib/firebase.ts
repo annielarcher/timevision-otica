@@ -91,6 +91,7 @@ export interface ReceitaVisual {
   pertoAlturaOE?: string;
 
   adicao?: string;
+  codigoLente?: string;
 
   // LEGACY
   esfericoOD?: string;

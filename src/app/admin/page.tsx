@@ -24,6 +24,7 @@ const GOLD = "#B5996A";
 export default function AdminPage() {
   const { toast } = useToast();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [loginEmail, setLoginEmail] = useState('');
   const [loginStep, setLoginStep] = useState<'email' | 'password'>('email');
   const [loginPassword, setLoginPassword] = useState('');
@@ -235,18 +236,26 @@ export default function AdminPage() {
     getItems<MembroEquipe>('equipe').then(setEquipe).catch(console.error);
     getItems<Evento>('eventos').then(setEventos).catch(console.error);
 
-    // Read login state if preserved
-    if (typeof window !== 'undefined') {
-      const isAuth = localStorage.getItem('tv_admin_auth') === 'true';
-      if (isAuth) {
-        setIsAuthenticated(true);
+    const checkLocalhostBypass = () => {
+      const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+      if (isLocalhost) {
         const storedUser = localStorage.getItem('tv_admin_user');
-        if (storedUser) {
-          setCurrentUser(JSON.parse(storedUser));
+        const isAuth = localStorage.getItem('tv_admin_auth') === 'true';
+        if (isAuth && storedUser) {
+           const parsedUser = JSON.parse(storedUser);
+           if (parsedUser.email === 'admin@timevision.com.br') {
+             setIsAuthenticated(true);
+             setCurrentUser(parsedUser);
+             loadData();
+             setIsLoadingAuth(false);
+             return true;
+           }
         }
-        loadData();
       }
+      return false;
+    };
 
+    if (typeof window !== 'undefined') {
       // Check if this is a password reset redirect
       const params = new URLSearchParams(window.location.search);
       const resetEmail = params.get('reset_email');
@@ -258,6 +267,46 @@ export default function AdminPage() {
           description: 'Defina sua nova senha de acesso abaixo.',
         });
       }
+    }
+
+    if (auth) {
+      import('firebase/auth').then(({ onAuthStateChanged }) => {
+        const unsubscribe = onAuthStateChanged(auth, async (user) => {
+          if (user) {
+            setIsAuthenticated(true);
+            const userProfile = { email: user.email || '', nome: user.displayName || 'Usuário Autenticado' };
+            setCurrentUser(userProfile);
+            if (typeof window !== 'undefined') {
+              localStorage.setItem('tv_admin_user', JSON.stringify(userProfile));
+              localStorage.setItem('tv_admin_auth', 'true');
+            }
+            loadData();
+          } else {
+            if (!checkLocalhostBypass()) {
+              setIsAuthenticated(false);
+              setCurrentUser(null);
+              if (typeof window !== 'undefined') {
+                localStorage.removeItem('tv_admin_auth');
+                localStorage.removeItem('tv_admin_user');
+              }
+            }
+          }
+          setIsLoadingAuth(false);
+        });
+        return () => unsubscribe();
+      });
+    } else {
+       // Fallback to purely local if Firebase is not configured
+       const isAuth = localStorage.getItem('tv_admin_auth') === 'true';
+       if (isAuth) {
+         setIsAuthenticated(true);
+         const storedUser = localStorage.getItem('tv_admin_user');
+         if (storedUser) {
+           setCurrentUser(JSON.parse(storedUser));
+         }
+         loadData();
+       }
+       setIsLoadingAuth(false);
     }
   }, []);
 
@@ -855,6 +904,15 @@ export default function AdminPage() {
   // Get current date string for input
   const orderDate = new Date().toISOString().split('T')[0];
 
+  if (isLoadingAuth) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
+        <div className="w-10 h-10 border-4 border-slate-800 border-t-primary rounded-full animate-spin mb-4"></div>
+        <p className="text-xs uppercase font-bold tracking-widest text-slate-400">Verificando sessão segura...</p>
+      </div>
+    );
+  }
+
   if (!isAuthenticated) {
     if (isFirstAccess) {
       return (
@@ -1094,8 +1152,8 @@ export default function AdminPage() {
       {/* HEADER BAR */}
       <div className="px-5 py-4 flex items-center justify-between sticky top-0 z-40" style={{ background: "#161616", borderBottom: `1px solid ${GOLD}20` }}>
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 flex items-center justify-center flex-shrink-0" style={{ background: GOLD }}>
-            <span className="font-display text-brand-graphite font-bold text-sm">TV</span>
+          <div className="w-8 h-8 flex items-center justify-center flex-shrink-0 bg-transparent">
+            <img src="/logos/icone/MARCA D´ÁGUA/icone-no-bg.svg" alt="Timevision Icon" className="w-full h-full object-contain" />
           </div>
           <div>
             <p className="font-tagline text-brand-off-white tracking-widest text-xs uppercase">Painel PDV & Gestão</p>
