@@ -55,7 +55,7 @@ export default function HomePage() {
         <div className="absolute inset-0 opacity-[0.08]" style={{ backgroundImage: diamondPattern, backgroundSize: "40px 40px" }} />
         <div className="relative z-10 flex flex-col justify-center h-full max-w-7xl mx-auto px-6">
           <div className="max-w-2xl">
-            <span className="inline-block px-3 py-1 text-xs mb-4" style={{ background: GOLD, color: OFF_WHITE, fontFamily: "var(--font-identification-05c)", letterSpacing: "0.22em", textTransform: "uppercase" }}>
+            <span className="inline-block px-3 py-1 text-xs mb-4 font-body font-semibold" style={{ background: GOLD, color: OFF_WHITE, letterSpacing: "0.15em", textTransform: "uppercase" }}>
               Boutique Óptica Atemporal — Recreio dos Bandeirantes, RJ
             </span>
             <h1 className="mt-6 mb-4 text-brand-off-white font-display text-5xl md:text-7xl font-bold leading-tight tracking-wide">
