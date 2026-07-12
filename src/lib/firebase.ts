@@ -1,7 +1,7 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword, signOut as fbSignOut, User } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc, collection, getDocs, deleteDoc, updateDoc } from 'firebase/firestore';
-
+import DOMPurify from 'dompurify';
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -180,6 +180,46 @@ export interface MembroEquipe {
   criadoEm: string;
 }
 
+// Data Sanitization and Validation (XSS & Database Errors Prevention)
+export function sanitizePayload<T>(data: T): T {
+  if (data === null) return null as any;
+  if (data === undefined) return undefined as any;
+
+  if (typeof data === 'string') {
+    // Client-side XSS prevention
+    if (typeof window !== 'undefined' && typeof DOMPurify !== 'undefined') {
+      return DOMPurify.sanitize(data.trim()) as any;
+    }
+    // Server-side basic fallback
+    return data.trim().replace(/[<>]/g, (c) => (c === '<' ? '&lt;' : '&gt;')) as any;
+  }
+
+  if (data instanceof Date) {
+    return data;
+  }
+
+  if (Array.isArray(data)) {
+    // Filter out undefined and sanitize elements
+    return data.filter(item => item !== undefined).map(item => sanitizePayload(item)) as any;
+  }
+
+  if (typeof data === 'object') {
+    const sanitizedObj: any = {};
+    for (const key in data) {
+      if (Object.prototype.hasOwnProperty.call(data, key)) {
+        const val = (data as any)[key];
+        // Firestore throws errors on undefined fields, so we omit them entirely
+        if (val !== undefined) {
+          sanitizedObj[key] = sanitizePayload(val);
+        }
+      }
+    }
+    return sanitizedObj;
+  }
+
+  return data;
+}
+
 // Helper generic database actions with localStorage fallback
 export async function getItems<T>(collectionName: string): Promise<T[]> {
   // Always allow fetching 'equipe' without auth so the login screen can check first access status
@@ -204,12 +244,13 @@ export async function getItems<T>(collectionName: string): Promise<T[]> {
 }
 
 export async function saveItem<T extends { id?: string; email?: string }>(collectionName: string, item: T): Promise<void> {
-  const documentId = item.id || item.email;
+  const sanitizedItem = sanitizePayload(item);
+  const documentId = sanitizedItem.id || sanitizedItem.email;
   if (!documentId) throw new Error('Item must have an id or email to be saved');
   
   if (isFirebaseConfigured && db && auth?.currentUser) {
     try {
-      await setDoc(doc(db, collectionName, documentId), item);
+      await setDoc(doc(db, collectionName, documentId), sanitizedItem);
       return;
     } catch (e) {
       console.error(`Firebase error saving ${collectionName}/${documentId}, falling back to localStorage:`, e);
@@ -220,9 +261,9 @@ export async function saveItem<T extends { id?: string; email?: string }>(collec
     const items = await getItems<T>(collectionName);
     const index = items.findIndex((i) => (i.id || i.email) === documentId);
     if (index >= 0) {
-      items[index] = item;
+      items[index] = sanitizedItem;
     } else {
-      items.push(item);
+      items.push(sanitizedItem);
     }
     localStorage.setItem(`tv_${collectionName}`, JSON.stringify(items));
   }
@@ -246,9 +287,11 @@ export async function deleteItem(collectionName: string, id: string): Promise<vo
 }
 
 export async function updateItemStatus(collectionName: string, id: string, status: string): Promise<void> {
+  const sanitizedStatus = sanitizePayload(status);
+  
   if (isFirebaseConfigured && db && auth?.currentUser) {
     try {
-      await updateDoc(doc(db, collectionName, id), { status });
+      await updateDoc(doc(db, collectionName, id), { status: sanitizedStatus });
       return;
     } catch (e) {
       console.error(`Firebase error updating status ${collectionName}/${id}, falling back to localStorage:`, e);
@@ -259,7 +302,7 @@ export async function updateItemStatus(collectionName: string, id: string, statu
     const items = await getItems<{ id?: string; email?: string; status?: string }>(collectionName);
     const index = items.findIndex((i) => (i.id || i.email) === id);
     if (index >= 0) {
-      items[index].status = status;
+      items[index].status = sanitizedStatus as string;
       localStorage.setItem(`tv_${collectionName}`, JSON.stringify(items));
     }
   }
@@ -288,9 +331,11 @@ export async function getItemById<T extends { id?: string; email?: string }>(col
 }
 
 export async function saveLead(lead: { nome: string; whatsapp: string; email: string; exame: string; criadoEm: string; eventoId?: string }): Promise<void> {
+  const sanitizedLead = sanitizePayload(lead);
+  
   if (isFirebaseConfigured && db) {
     try {
-      await setDoc(doc(db, 'inscricoes', `lead-${Date.now()}`), lead);
+      await setDoc(doc(db, 'inscricoes', `lead-${Date.now()}`), sanitizedLead);
       return;
     } catch (e) {
       console.error('Firebase error saving lead, falling back to localStorage:', e);
@@ -300,7 +345,7 @@ export async function saveLead(lead: { nome: string; whatsapp: string; email: st
   if (typeof window !== 'undefined') {
     const local = localStorage.getItem('tv_inscricoes');
     const items = local ? JSON.parse(local) : [];
-    items.push({ id: `lead-${Date.now()}`, ...lead });
+    items.push({ id: `lead-${Date.now()}`, ...sanitizedLead });
     localStorage.setItem('tv_inscricoes', JSON.stringify(items));
   }
 }
