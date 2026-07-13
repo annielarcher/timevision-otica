@@ -127,7 +127,7 @@ function OrcamentoWizard() {
     <div className="pt-24 min-h-screen bg-brand-off-white">
       <div className="max-w-3xl mx-auto px-6 py-16">
         <div className="text-center mb-12">
-          <span className="inline-block px-3 py-1 text-xs mb-4" style={{ background: GOLD, color: OFF_WHITE, fontFamily: "var(--font-identification-05c)", letterSpacing: "0.22em", textTransform: "uppercase" }}>
+          <span className="inline-block px-3 py-1 text-xs mb-4" style={{ background: GOLD, color: OFF_WHITE, fontFamily: "var(--font-lora)", letterSpacing: "0.22em", textTransform: "uppercase" }}>
             Orçamento Exclusivo
           </span>
           <h1 className="mt-4 text-brand-graphite font-display text-4xl font-bold">Orçamento VIP</h1>
@@ -141,7 +141,7 @@ function OrcamentoWizard() {
               <div 
                 className="w-8 h-8 flex items-center justify-center text-xs font-bold transition-all" 
                 style={{ 
-                  fontFamily: "var(--font-identification-05c)", 
+                  fontFamily: "var(--font-lora)", 
                   background: step >= s ? (step === s ? GRAPHITE : GOLD) : "transparent", 
                   color: step >= s ? OFF_WHITE : "rgba(61,61,61,0.3)", 
                   border: `1px solid ${step >= s ? (step === s ? GRAPHITE : GOLD) : "rgba(61,61,61,0.2)"}` 

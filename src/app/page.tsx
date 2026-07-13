@@ -157,7 +157,7 @@ export default function HomePage() {
                 onClick={() => setFilter(f)} 
                 className="px-4 py-1.5 text-xs uppercase transition-all duration-200" 
                 style={{ 
-                  fontFamily: "var(--font-identification-05c)", 
+                  fontFamily: "var(--font-lora)", 
                   letterSpacing: "0.18em", 
                   background: filter === f ? GOLD : "transparent", 
                   color: filter === f ? OFF_WHITE : "rgba(249,247,248,0.45)", 
@@ -179,7 +179,7 @@ export default function HomePage() {
                   />
                   <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-all duration-500" />
                   <div className="absolute top-3 left-3">
-                    <span className="inline-block px-3 py-1 text-xs" style={{ background: GOLD, color: OFF_WHITE, fontFamily: "var(--font-identification-05c)", letterSpacing: "0.22em", textTransform: "uppercase" }}>
+                    <span className="inline-block px-3 py-1 text-xs" style={{ background: GOLD, color: OFF_WHITE, fontFamily: "var(--font-lora)", letterSpacing: "0.22em", textTransform: "uppercase" }}>
                       {product.category}
                     </span>
                   </div>

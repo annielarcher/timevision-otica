@@ -25,7 +25,7 @@ export function Hero() {
 
       {/* Hero Content */}
       <div className="relative z-10 max-w-5xl px-6 text-center">
-        {/* Superlabel (Identification 05C font) */}
+        {/* Superlabel (Lora font) */}
         <span className="inline-block font-body text-[10px] md:text-xs font-semibold tracking-[0.15em] text-brand-gold uppercase mb-6 bg-brand-graphite/50 backdrop-blur-sm border border-brand-gold/25 px-4 py-2 rounded-full">
           Boutique Óptica Atemporal · Recreio dos Bandeirantes, RJ
         </span>
