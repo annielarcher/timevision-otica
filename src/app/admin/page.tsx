@@ -4,14 +4,14 @@ import React, { useState, useEffect } from 'react';
 import { 
   TrendingUp, Users, Package, ShoppingCart, Sparkles, LogOut, Lock, 
   Search, Plus, Trash2, Edit3, CheckCircle, Clock, Eye, AlertTriangle, Calendar, FlaskConical, Ban,
-  DollarSign, Percent, Heart, ShieldAlert, HelpCircle, Send, AlertCircle
+  DollarSign, Percent, Heart, ShieldAlert, HelpCircle, Send, AlertCircle, Smartphone
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { 
   getItems, saveItem, deleteItem, updateItemStatus,
-  Cliente, Produto, Venda, ReceitaVisual, auth, Evento, MembroEquipe, Laboratorio, ConfigFiscal
+  Cliente, Produto, Venda, ReceitaVisual, auth, Evento, MembroEquipe, Laboratorio, ConfigFiscal, ConfigCobranca
 } from '@/lib/firebase';
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import dynamic from 'next/dynamic';
@@ -32,7 +32,7 @@ export default function AdminPage() {
   const [isFirebaseMode, setIsFirebaseMode] = useState(false);
   
   // Navigation Tabs
-  const [activeTab, setActiveTab] = useState<'dash' | 'pdv' | 'clientes' | 'estoque' | 'eventos' | 'mkt' | 'laboratorios' | 'financeiro'>('dash');
+  const [activeTab, setActiveTab] = useState<'dash' | 'pdv' | 'clientes' | 'estoque' | 'eventos' | 'mkt' | 'laboratorios' | 'financeiro' | 'cobrancas'>('dash');
   const [marketingMode, setMarketingMode] = useState<'flyer' | 'banner'>('flyer');
 
   // Database states
@@ -77,6 +77,19 @@ export default function AdminPage() {
   const [fiscalCertBase64, setFiscalCertBase64] = useState('');
   const [isFiscalHelpOpen, setIsFiscalHelpOpen] = useState(false);
   const [selectedMonthFilter, setSelectedMonthFilter] = useState<string>('todos');
+
+  // Billing (Cobranças) States
+  const [cobrancaSearch, setCobrancaSearch] = useState('');
+  const [cobrancaStatusFilter, setCobrancaStatusFilter] = useState<'todos' | 'atrasados' | 'pendentes' | 'pagos'>('todos');
+  const [reschedulingInstallment, setReschedulingInstallment] = useState<any | null>(null);
+  const [rescheduleNewDate, setRescheduleNewDate] = useState('');
+
+  // Billing Provider Configurations States
+  const [configCobrancaProvedor, setConfigCobrancaProvedor] = useState<'asaas' | 'mercado_pago' | 'pagseguro' | 'nenhum'>('nenhum');
+  const [configCobrancaApiKey, setConfigCobrancaApiKey] = useState('');
+  const [configCobrancaWebhookAtivo, setConfigCobrancaWebhookAtivo] = useState(false);
+  const [configCobrancaDiasAntesNotificar, setConfigCobrancaDiasAntesNotificar] = useState(3);
+  const [configCobrancaEnvioAutomatico, setConfigCobrancaEnvioAutomatico] = useState(false);
 
   // Multi-user Auth states
   const [currentUser, setCurrentUser] = useState<{ email: string; nome: string } | null>(null);
@@ -276,6 +289,17 @@ export default function AdminPage() {
         setFiscalAmbiente(conf.ambiente || 'homologacao');
         setFiscalCertSenha(conf.certificadoSenha || '');
         setFiscalCertBase64(conf.certificadoBase64 || '');
+      }
+
+      // Load Billing Settings
+      const billingConfigs = await getItems<ConfigCobranca>('config_cobranca');
+      if (billingConfigs.length > 0) {
+        const conf = billingConfigs[0];
+        setConfigCobrancaProvedor(conf.provedor || 'nenhum');
+        setConfigCobrancaApiKey(conf.apiKey || '');
+        setConfigCobrancaWebhookAtivo(conf.webhookAtivo || false);
+        setConfigCobrancaDiasAntesNotificar(conf.diasAntesNotificar || 3);
+        setConfigCobrancaEnvioAutomatico(conf.envioAutomatico || false);
       }
     } catch (error) {
       console.error('Error loading DB:', error);
@@ -1039,6 +1063,67 @@ export default function AdminPage() {
     }
   };
 
+  const handleSaveConfigCobranca = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const configData: ConfigCobranca = {
+        id: 'default',
+        provedor: configCobrancaProvedor,
+        apiKey: configCobrancaApiKey,
+        webhookAtivo: configCobrancaWebhookAtivo,
+        diasAntesNotificar: configCobrancaDiasAntesNotificar,
+        envioAutomatico: configCobrancaEnvioAutomatico
+      };
+      await saveItem('config_cobranca', configData);
+      toast({
+        title: 'Configurações Salvas',
+        description: 'Credenciais de cobrança armazenadas com sucesso.',
+      });
+      loadData();
+    } catch (err: any) {
+      console.error(err);
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao Salvar',
+        description: 'Não foi possível salvar as configurações de cobrança.',
+      });
+    }
+  };
+
+  const handleUpdateInstallmentDate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reschedulingInstallment || !rescheduleNewDate) return;
+    try {
+      const { vendaOriginal, index } = reschedulingInstallment;
+      const updatedPagamento = {
+        ...(vendaOriginal.pagamento || { metodo: 'Boleto', parcelas: '1x', sinal: 0 }),
+        datasVencimento: {
+          ...(vendaOriginal.pagamento?.datasVencimento || {}),
+          [index]: rescheduleNewDate
+        }
+      };
+      const updated: Venda = {
+        ...vendaOriginal,
+        pagamento: updatedPagamento
+      };
+      await saveItem('vendas', updated);
+      toast({
+        title: 'Vencimento Reagendado',
+        description: `Vencimento da parcela ${index} alterado para ${rescheduleNewDate.split('-').reverse().join('/')}.`,
+      });
+      setReschedulingInstallment(null);
+      setRescheduleNewDate('');
+      loadData();
+    } catch (err: any) {
+      console.error(err);
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao Reagendar',
+        description: 'Não foi possível reagendar a parcela.',
+      });
+    }
+  };
+
   // 7. POS Sale & OS/Budget Generation Trigger
   const handlePdvSale = async (e: React.FormEvent, type: 'venda' | 'orcamento') => {
     e.preventDefault();
@@ -1543,7 +1628,8 @@ export default function AdminPage() {
             { id: 'eventos', Icon: Calendar, label: "Eventos" },
             { id: 'mkt', Icon: Sparkles, label: "Marketing" },
             { id: 'laboratorios', Icon: FlaskConical, label: "Laboratórios" },
-            { id: 'financeiro', Icon: DollarSign, label: "Financeiro" }
+            { id: 'financeiro', Icon: DollarSign, label: "Financeiro" },
+            { id: 'cobrancas', Icon: AlertCircle, label: "Cobranças" }
           ].map(({ id, Icon, label }) => (
             <button 
               key={id} 
@@ -3774,6 +3860,421 @@ export default function AdminPage() {
           );
         })()}
 
+        {/* TABA 9: GESTÃO DE COBRANÇAS */}
+        {activeTab === 'cobrancas' && (() => {
+          const today = new Date();
+          const todayStr = today.toISOString().split('T')[0];
+
+          // 1. Gather all installments for non-credit card parcelled sales
+          interface InstallmentItem {
+            id: string;
+            saleId: string;
+            clienteNome: string;
+            clienteCpf: string;
+            clienteTelefone: string;
+            metodo: string;
+            parcelaLabel: string;
+            valor: number;
+            dataVencimento: string;
+            isPaga: boolean;
+            isAtrasada: boolean;
+            vendaOriginal: Venda;
+            index: number;
+          }
+
+          const allInstallments: InstallmentItem[] = [];
+
+          vendas.forEach(v => {
+            if (v.status === 'cancelado' || v.status === 'orcamento') return;
+            const method = v.pagamento?.metodo || '';
+            const installmentsStr = v.pagamento?.parcelas || '1x';
+            const numInstallments = parseInt(installmentsStr) || 1;
+
+            if (method !== 'Cartão de Crédito' && numInstallments > 1) {
+              const saleDateObj = new Date(v.dataVenda);
+              if (isNaN(saleDateObj.getTime())) return;
+
+              const total = v.valorTotal || 0;
+              const sinal = v.pagamento?.sinal || 0;
+              const remaining = total - sinal;
+              const installmentValue = remaining / numInstallments;
+
+              for (let i = 1; i <= numInstallments; i++) {
+                const isPaga = v.pagamento?.parcelasPagas?.[i] || false;
+
+                let dueDateStr = v.pagamento?.datasVencimento?.[i];
+                if (!dueDateStr) {
+                  const dueDate = new Date(saleDateObj.getFullYear(), saleDateObj.getMonth() + i, saleDateObj.getDate());
+                  dueDateStr = dueDate.toISOString().split('T')[0];
+                }
+
+                const isAtrasada = !isPaga && dueDateStr < todayStr;
+
+                allInstallments.push({
+                  id: `${v.id}-p${i}`,
+                  saleId: v.id,
+                  clienteNome: v.clienteNome,
+                  clienteCpf: v.clienteCpf || '',
+                  clienteTelefone: v.clienteTelefone || '',
+                  metodo: method,
+                  parcelaLabel: `${i}/${numInstallments}`,
+                  valor: installmentValue,
+                  dataVencimento: dueDateStr,
+                  isPaga,
+                  isAtrasada,
+                  vendaOriginal: v,
+                  index: i
+                });
+              }
+            }
+          });
+
+          // 2. Metrics calculation
+          const totalPendente = allInstallments.reduce((acc, inst) => acc + (inst.isPaga ? 0 : inst.valor), 0);
+          const totalAtrasado = allInstallments.reduce((acc, inst) => acc + (inst.isAtrasada ? inst.valor : 0), 0);
+          const totalRecebido = allInstallments.reduce((acc, inst) => acc + (inst.isPaga ? inst.valor : 0), 0);
+          const totalVencido = allInstallments.filter(inst => inst.isPaga || inst.isAtrasada);
+          const totalPaidCount = allInstallments.filter(inst => inst.isPaga).length;
+          const totalVencidoCount = totalVencido.length;
+          const taxaAdimplencia = totalVencidoCount > 0 ? (totalPaidCount / totalVencidoCount) * 100 : 100;
+
+          // 3. Filter list based on search and status
+          const filteredInstallments = allInstallments.filter(inst => {
+            const query = cobrancaSearch.toLowerCase();
+            const matchesSearch = 
+              inst.clienteNome.toLowerCase().includes(query) ||
+              inst.clienteCpf.toLowerCase().includes(query) ||
+              inst.saleId.toLowerCase().includes(query);
+
+            if (!matchesSearch) return false;
+
+            if (cobrancaStatusFilter === 'atrasados') return inst.isAtrasada;
+            if (cobrancaStatusFilter === 'pendentes') return !inst.isPaga && !inst.isAtrasada;
+            if (cobrancaStatusFilter === 'pagos') return inst.isPaga;
+            return true;
+          });
+
+          return (
+            <div className="space-y-8 animate-in fade-in duration-300">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+                <div>
+                  <h2 className="text-2xl font-headline font-bold">Gestão de Cobranças & Fila de Parcelamento</h2>
+                  <p className="text-sm text-slate-450">Gerencie recebimentos de boletos e crediários, configure gateways e controle a adimplência.</p>
+                </div>
+              </div>
+
+              {/* Summary Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <Card className="bg-slate-900 border-slate-800 shadow">
+                  <CardContent className="pt-6">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <span className="text-[10px] font-bold uppercase text-slate-400">Total Pendente</span>
+                        <h3 className="text-2xl font-black text-slate-200 mt-1">
+                          R$ {totalPendente.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </h3>
+                      </div>
+                      <div className="bg-blue-500/10 p-2 rounded-lg text-blue-400"><Clock size={16} /></div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-slate-900 border-slate-800 shadow">
+                  <CardContent className="pt-6">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <span className="text-[10px] font-bold uppercase text-slate-400">Total Atrasado (Inadimplência)</span>
+                        <h3 className="text-2xl font-black text-red-500 mt-1">
+                          R$ {totalAtrasado.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </h3>
+                      </div>
+                      <div className="bg-red-500/10 p-2 rounded-lg text-red-500"><AlertTriangle size={16} /></div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-slate-900 border-slate-800 shadow">
+                  <CardContent className="pt-6">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <span className="text-[10px] font-bold uppercase text-slate-400">Total Recebido</span>
+                        <h3 className="text-2xl font-black text-emerald-400 mt-1">
+                          R$ {totalRecebido.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </h3>
+                      </div>
+                      <div className="bg-emerald-500/10 p-2 rounded-lg text-emerald-400"><CheckCircle size={16} /></div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-slate-900 border-slate-800 shadow">
+                  <CardContent className="pt-6">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <span className="text-[10px] font-bold uppercase text-slate-400">Taxa de Adimplência</span>
+                        <h3 className="text-2xl font-black text-brand-gold mt-1">
+                          {taxaAdimplencia.toFixed(1)}%
+                        </h3>
+                      </div>
+                      <div className="bg-amber-500/10 p-2 rounded-lg text-brand-gold"><TrendingUp size={16} /></div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Main Panel Content */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                {/* Installments List & Filters */}
+                <div className="lg:col-span-2 space-y-6">
+                  <Card className="bg-slate-900 border-slate-800 shadow">
+                    <CardHeader className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div>
+                        <CardTitle className="text-lg font-bold text-slate-200">Fila de Recebimentos</CardTitle>
+                        <CardDescription>Auditoria de parcelas em aberto e cobranças ativas.</CardDescription>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <div className="relative w-48">
+                          <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-500" />
+                          <input
+                            type="text"
+                            placeholder="Buscar cliente, CPF, ID..."
+                            value={cobrancaSearch}
+                            onChange={(e) => setCobrancaSearch(e.target.value)}
+                            className="bg-slate-950 border border-slate-850 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white focus:outline-none focus:border-primary w-full"
+                          />
+                        </div>
+                        <select
+                          value={cobrancaStatusFilter}
+                          onChange={(e) => setCobrancaStatusFilter(e.target.value as any)}
+                          className="bg-slate-950 border border-slate-850 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none"
+                        >
+                          <option value="todos">Todos Status</option>
+                          <option value="atrasados">Atrasados</option>
+                          <option value="pendentes">No Prazo</option>
+                          <option value="pagos">Pagos</option>
+                        </select>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs border-collapse">
+                          <thead>
+                            <tr className="border-b border-slate-800 text-slate-400 uppercase tracking-widest text-[9px] font-bold">
+                              <th className="py-3 px-2">Pedido</th>
+                              <th className="py-3 px-2">Cliente / CPF</th>
+                              <th className="py-3 px-2">Parcela</th>
+                              <th className="py-3 px-2">Valor</th>
+                              <th className="py-3 px-2">Vencimento</th>
+                              <th className="py-3 px-2">Status</th>
+                              <th className="py-3 px-2 text-right">Ações</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {filteredInstallments.length === 0 ? (
+                              <tr>
+                                <td colSpan={7} className="py-6 text-center text-slate-500 italic">Nenhum registro de parcelamento encontrado.</td>
+                              </tr>
+                            ) : (
+                              filteredInstallments.map(inst => {
+                                const [year, month, day] = inst.dataVencimento.split('-');
+                                const formattedDueDate = `${day}/${month}/${year}`;
+
+                                const cleanPhone = inst.clienteTelefone.replace(/\D/g, '');
+                                const formattedPhone = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
+
+                                const messageText = inst.isAtrasada
+                                  ? `Olá ${inst.clienteNome}, tudo bem? Identificamos que a parcela ${inst.parcelaLabel} no valor de R$ ${inst.valor.toFixed(2)}, com vencimento em ${formattedDueDate}, referente à sua Ordem de Serviço #${inst.saleId}, está pendente. Poderia por gentileza nos enviar o comprovante de pagamento? Obrigado!`
+                                  : `Olá ${inst.clienteNome}, tudo bem? Lembramos que a parcela ${inst.parcelaLabel} no valor de R$ ${inst.valor.toFixed(2)}, referente à sua Ordem de Serviço #${inst.saleId}, vencerá em ${formattedDueDate}. Qualquer dúvida estamos à disposição!`;
+
+                                const encodedMessage = encodeURIComponent(messageText);
+                                const waUrl = `https://wa.me/${formattedPhone}?text=${encodedMessage}`;
+
+                                return (
+                                  <tr key={inst.id} className="border-b border-slate-850 hover:bg-slate-950/40">
+                                    <td className="py-4 px-2 font-mono font-bold text-slate-350">
+                                      {inst.saleId}
+                                    </td>
+                                    <td className="py-4 px-2">
+                                      <div className="font-bold text-white">{inst.clienteNome}</div>
+                                      <div className="text-[10px] text-slate-500">CPF: {inst.clienteCpf || 'N/A'}</div>
+                                    </td>
+                                    <td className="py-4 px-2 font-bold text-slate-400">
+                                      {inst.parcelaLabel}
+                                    </td>
+                                    <td className="py-4 px-2 font-black text-slate-200">
+                                      R$ {inst.valor.toFixed(2)}
+                                    </td>
+                                    <td className="py-4 px-2 font-medium text-slate-300">
+                                      {formattedDueDate}
+                                    </td>
+                                    <td className="py-4 px-2">
+                                      {inst.isPaga ? (
+                                        <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[9px] px-2 py-0.5 rounded font-bold uppercase flex items-center gap-1 w-fit">
+                                          <CheckCircle size={10} /> Pago
+                                        </span>
+                                      ) : inst.isAtrasada ? (
+                                        <span className="bg-red-500/10 text-red-500 border border-red-500/30 text-[9px] px-2 py-0.5 rounded font-bold uppercase flex items-center gap-1 w-fit animate-pulse">
+                                          <AlertTriangle size={10} /> Atrasado
+                                        </span>
+                                      ) : (
+                                        <span className="bg-blue-500/10 text-blue-400 border border-blue-500/30 text-[9px] px-2 py-0.5 rounded font-bold uppercase flex items-center gap-1 w-fit">
+                                          <Clock size={10} /> No Prazo
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="py-4 px-2 text-right">
+                                      <div className="flex gap-2 justify-end">
+                                        {!inst.isPaga && (
+                                          <>
+                                            <Button
+                                              type="button"
+                                              onClick={() => handleMarkInstallmentAsPaid(inst.vendaOriginal, inst.index)}
+                                              className="bg-emerald-700 hover:bg-emerald-600 text-xs px-2.5 py-1.5 h-auto font-bold flex items-center gap-1"
+                                              title="Marcar como Pago"
+                                            >
+                                              <CheckCircle size={10} /> Confirmar Pago
+                                            </Button>
+                                            <Button
+                                              type="button"
+                                              onClick={() => {
+                                                setReschedulingInstallment(inst);
+                                                setRescheduleNewDate(inst.dataVencimento);
+                                              }}
+                                              variant="outline"
+                                              className="border-slate-800 text-slate-400 text-xs px-2.5 py-1.5 h-auto font-bold flex items-center gap-1 hover:bg-slate-850 hover:text-white"
+                                              title="Alterar Data de Vencimento"
+                                            >
+                                              <Calendar size={10} /> Reagendar
+                                            </Button>
+                                            <a
+                                              href={waUrl}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="inline-flex items-center justify-center bg-slate-950 border border-slate-800 text-brand-gold hover:bg-slate-850 hover:text-white rounded-lg text-xs font-bold px-2 py-1.5 h-auto transition-colors gap-1"
+                                              title="Enviar WhatsApp de Cobrança"
+                                            >
+                                              <Send size={10} /> Cobrar
+                                            </a>
+                                          </>
+                                        )}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Billing Configuration Form */}
+                <div className="lg:col-span-1 space-y-6">
+                  <Card className="bg-slate-900 border-slate-800 shadow">
+                    <CardHeader>
+                      <CardTitle className="text-lg font-bold text-slate-200 flex items-center gap-2">
+                        <Smartphone className="text-brand-gold h-5 w-5" /> Integração de Boletos / Gateway
+                      </CardTitle>
+                      <CardDescription>Pretende conectar um emissor automático? Configure as credenciais do provedor abaixo.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <form onSubmit={handleSaveConfigCobranca} className="space-y-4">
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[10px] font-bold uppercase text-slate-400">Provedor de Cobrança</label>
+                          <select
+                            value={configCobrancaProvedor}
+                            onChange={(e) => setConfigCobrancaProvedor(e.target.value as any)}
+                            className="bg-slate-950 border border-slate-850 rounded-lg p-2.5 text-sm text-white focus:outline-none"
+                          >
+                            <option value="nenhum">Sem Integração (Modo Manual)</option>
+                            <option value="asaas">Asaas (Boleto & Pix Automático)</option>
+                            <option value="mercado_pago">Mercado Pago</option>
+                            <option value="pagseguro">PagSeguro</option>
+                          </select>
+                        </div>
+
+                        {configCobrancaProvedor !== 'nenhum' && (
+                          <>
+                            <div className="flex flex-col gap-1.5 animate-in fade-in duration-300">
+                              <label className="text-[10px] font-bold uppercase text-slate-400">Chave API / Token de Acesso</label>
+                              <input
+                                type="password"
+                                value={configCobrancaApiKey}
+                                onChange={(e) => setConfigCobrancaApiKey(e.target.value)}
+                                placeholder="Insira o Token do gateway"
+                                className="bg-slate-950 border border-slate-850 rounded-lg p-2.5 text-sm text-white focus:outline-none"
+                                required
+                              />
+                            </div>
+
+                            <div className="space-y-3 pt-3 border-t border-slate-800">
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  id="cobrancaAutoSend"
+                                  checked={configCobrancaEnvioAutomatico}
+                                  onChange={(e) => setConfigCobrancaEnvioAutomatico(e.target.checked)}
+                                  className="w-4 h-4 rounded border-slate-800 bg-slate-950"
+                                />
+                                <label htmlFor="cobrancaAutoSend" className="text-xs text-slate-350 cursor-pointer select-none">
+                                  Enviar boletos automaticamente
+                                </label>
+                              </div>
+
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  id="cobrancaWebhookActive"
+                                  checked={configCobrancaWebhookAtivo}
+                                  onChange={(e) => setConfigCobrancaWebhookAtivo(e.target.checked)}
+                                  className="w-4 h-4 rounded border-slate-800 bg-slate-950"
+                                />
+                                <label htmlFor="cobrancaWebhookActive" className="text-xs text-slate-350 cursor-pointer select-none">
+                                  Ativar webhook de conciliação automática
+                                </label>
+                              </div>
+
+                              <div className="flex flex-col gap-1">
+                                <label className="text-[9px] uppercase font-bold text-slate-500">Notificar cliente N dias antes do vencimento</label>
+                                <input
+                                  type="number"
+                                  value={configCobrancaDiasAntesNotificar}
+                                  onChange={(e) => setConfigCobrancaDiasAntesNotificar(Number(e.target.value))}
+                                  min="1"
+                                  max="15"
+                                  className="w-20 bg-slate-950 border border-slate-850 rounded-lg p-1.5 text-xs text-white text-center"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="bg-slate-950 p-3 rounded-lg border border-slate-850 text-[10px] text-slate-400 space-y-1">
+                              <span className="font-bold text-brand-gold">URL de Webhook da Timevision:</span>
+                              <div className="bg-slate-900 p-2 rounded font-mono break-all text-[9px] text-slate-300 select-all cursor-pointer">
+                                https://timevision.com.br/api/webhooks/{configCobrancaProvedor}
+                              </div>
+                              <span className="block text-[8px] text-slate-500">Cadastre esta URL no painel do provedor para baixar boletos pagos na hora.</span>
+                            </div>
+                          </>
+                        )}
+
+                        <div className="pt-2">
+                          <Button type="submit" className="w-full bg-primary text-primary-foreground font-bold py-3.5">
+                            Salvar Configuração de Cobrança
+                          </Button>
+                        </div>
+                      </form>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+
         {/* DANFE NFC-e Modal Simulation */}
         {nfeInvoiceModalVenda && (
           <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -3851,6 +4352,61 @@ export default function AdminPage() {
                   Fechar DANFE
                 </Button>
               </div>
+            </Card>
+          </div>
+        )}
+
+        {/* Reschedule Installment Vencimento Modal */}
+        {reschedulingInstallment && (
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <Card className="w-full max-w-md bg-slate-900 border border-slate-800 text-white shadow-2xl p-6">
+              <CardHeader>
+                <CardTitle className="text-lg font-bold flex items-center gap-2">
+                  <Calendar className="text-brand-gold h-5 w-5" /> Reagendar Parcela
+                </CardTitle>
+                <CardDescription className="text-slate-400">
+                  Defina uma nova data de vencimento para a parcela do cliente.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleUpdateInstallmentDate} className="space-y-4">
+                  <div className="bg-slate-950 p-3.5 rounded-lg border border-slate-850 space-y-1 text-xs text-slate-300">
+                    <div><span className="text-slate-450">Cliente:</span> <span className="font-bold text-white">{reschedulingInstallment.clienteNome}</span></div>
+                    <div><span className="text-slate-450">Pedido ID:</span> <span className="font-mono text-slate-350">{reschedulingInstallment.saleId}</span></div>
+                    <div><span className="text-slate-450">Parcela:</span> <span className="font-bold text-white">{reschedulingInstallment.parcelaLabel}</span></div>
+                    <div><span className="text-slate-450">Valor:</span> <span className="font-black text-brand-gold">R$ {reschedulingInstallment.valor.toFixed(2)}</span></div>
+                    <div><span className="text-slate-450">Vencimento Atual:</span> <span className="font-medium text-slate-300">{reschedulingInstallment.dataVencimento.split('-').reverse().join('/')}</span></div>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-bold uppercase text-slate-400">Nova Data de Vencimento</label>
+                    <input
+                      type="date"
+                      value={rescheduleNewDate}
+                      onChange={(e) => setRescheduleNewDate(e.target.value)}
+                      className="bg-slate-950 border border-slate-850 rounded-lg p-2.5 text-sm text-white focus:outline-none"
+                      required
+                    />
+                  </div>
+
+                  <div className="flex gap-3 pt-4 border-t border-slate-800">
+                    <Button type="submit" className="flex-1 bg-primary text-primary-foreground font-bold">
+                      Salvar Alteração
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setReschedulingInstallment(null);
+                        setRescheduleNewDate('');
+                      }}
+                      className="border-slate-800 text-slate-400 hover:bg-slate-850 hover:text-white"
+                    >
+                      Cancelar
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
             </Card>
           </div>
         )}

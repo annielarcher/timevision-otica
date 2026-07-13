@@ -174,6 +174,15 @@ export interface ConfigFiscal {
   certificadoBase64?: string;
 }
 
+export interface ConfigCobranca {
+  id?: string;
+  provedor: 'asaas' | 'mercado_pago' | 'pagseguro' | 'nenhum';
+  apiKey: string;
+  webhookAtivo: boolean;
+  diasAntesNotificar: number;
+  envioAutomatico: boolean;
+}
+
 export interface LenteLaboratorio {
   id: string;
   nome: string;
