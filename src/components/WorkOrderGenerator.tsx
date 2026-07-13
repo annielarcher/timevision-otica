@@ -672,8 +672,8 @@ export default function WorkOrderGenerator({ initialVenda, onClose, onSaveSucces
           { id: 'lens-id', nome: lensType, quantity: 1, precoVenda: priceTotal * 0.6, precoCusto: priceTotal * 0.3 } as any
         ],
         valorTotal: priceTotal,
-        custoTotal: priceTotal * 0.5,
-        lucroTotal: priceTotal * 0.5,
+        custoTotal: priceTotal * 0.3,
+        lucroTotal: priceTotal * 0.7,
         receita: {
           longeEsfericoOD,
           longeEsfericoOE,
@@ -709,6 +709,7 @@ export default function WorkOrderGenerator({ initialVenda, onClose, onSaveSucces
         } as any,
         laboratorioId: laboratorioId || undefined,
         laboratorioNome: laboratorios.find(l => l.id === laboratorioId)?.nome || undefined,
+        eventoId: initialVenda?.eventoId || undefined,
         validadeOrcamento: isOrcamento ? new Date(new Date(orderDate).getTime() + 7 * 86400000).toISOString().split('T')[0] : undefined
       };
 
@@ -1017,6 +1018,7 @@ export default function WorkOrderGenerator({ initialVenda, onClose, onSaveSucces
                 <label className="text-[9px] uppercase font-bold text-slate-400">Sinal Recebido (R$)</label>
                 <input
                   type="number"
+                  step="any"
                   value={downPayment}
                   onChange={(e) => setDownPayment(e.target.value)}
                   className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-white"
@@ -1028,6 +1030,7 @@ export default function WorkOrderGenerator({ initialVenda, onClose, onSaveSucces
               <label className="text-[9px] uppercase font-bold text-slate-400">Valor Total (R$)</label>
               <input
                 type="number"
+                step="any"
                 value={priceTotal}
                 onChange={(e) => setPriceTotal(Number(e.target.value))}
                 className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-white"

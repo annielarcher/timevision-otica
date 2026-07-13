@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Trash2, Plus, FileUp, Settings } from 'lucide-react';
+import { Trash2, Plus, FileUp, Settings, Search } from 'lucide-react';
 import { getItems, saveItem, deleteItem, Laboratorio, LenteLaboratorio } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 
@@ -11,6 +11,7 @@ export default function LaboratoriosManager() {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingLab, setEditingLab] = useState<Laboratorio | null>(null);
+  const [searchLab, setSearchLab] = useState('');
 
   useEffect(() => {
     loadLaboratorios();
@@ -148,8 +149,37 @@ export default function LaboratoriosManager() {
         </Button>
       </div>
 
+      <div className="bg-slate-900 border-slate-800 p-4 rounded-xl shadow border">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500" />
+          <input
+            type="text"
+            value={searchLab}
+            onChange={(e) => setSearchLab(e.target.value)}
+            placeholder="Pesquisar laboratório ou lente..."
+            className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-10 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-primary"
+          />
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 gap-6">
-        {laboratorios.map(lab => (
+        {laboratorios.map(originalLab => {
+          // If searching, filter labs and their lenses
+          if (searchLab) {
+            const matchesLab = originalLab.nome.toLowerCase().includes(searchLab.toLowerCase());
+            const filteredLentes = originalLab.lentes?.filter(l => l.nome.toLowerCase().includes(searchLab.toLowerCase())) || [];
+            
+            if (!matchesLab && filteredLentes.length === 0) return null;
+            
+            var lab = {
+              ...originalLab,
+              lentes: matchesLab ? originalLab.lentes : filteredLentes
+            };
+          } else {
+            var lab = originalLab;
+          }
+          
+          return (
           <Card key={lab.id} className="bg-slate-900 border-slate-800">
             <CardHeader className="flex flex-row justify-between items-start">
               <div>
@@ -235,7 +265,7 @@ export default function LaboratoriosManager() {
               )}
             </CardContent>
           </Card>
-        ))}
+        )})}
 
         {laboratorios.length === 0 && (
           <div className="text-center py-12 border border-dashed border-slate-800 rounded-lg text-slate-500">
