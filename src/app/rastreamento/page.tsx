@@ -14,7 +14,7 @@ const GRAY = "#585858";
 
 const FONT_DISPLAY = "var(--font-soligant)";
 const FONT_BODY = "var(--font-lora)";
-const FONT_LABEL = "var(--font-identification-05c)";
+const FONT_LABEL = "var(--font-lora)";
 
 export default function RastreamentoPage() {
   const [query, setQuery] = useState("");

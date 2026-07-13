@@ -32,7 +32,7 @@ export default function SobrePage() {
         <div className="absolute inset-0 opacity-[0.09]" style={{ backgroundImage: diamondPattern, backgroundSize: "40px 40px" }} />
         <div className="absolute right-12 top-1/2 -translate-y-1/2 opacity-[0.07] pointer-events-none hidden lg:block font-display text-[18rem] text-brand-off-white font-bold leading-none">TV</div>
         <div className="relative z-10 max-w-7xl mx-auto px-6 pb-16 w-full">
-          <span className="inline-block px-3 py-1 text-xs mb-4" style={{ background: GOLD, color: OFF_WHITE, fontFamily: "var(--font-identification-05c)", letterSpacing: "0.22em", textTransform: "uppercase" }}>
+          <span className="inline-block px-3 py-1 text-xs mb-4" style={{ background: GOLD, color: OFF_WHITE, fontFamily: "var(--font-lora)", letterSpacing: "0.22em", textTransform: "uppercase" }}>
             A Boutique
           </span>
           <h1 className="mt-4 text-brand-off-white font-display text-4xl md:text-6xl font-bold leading-tight">
@@ -69,7 +69,7 @@ export default function SobrePage() {
       <section className="py-24 px-6" style={{ background: GRAPHITE }}>
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-14">
-            <span className="inline-block px-3 py-1 text-xs mb-4" style={{ background: GOLD, color: OFF_WHITE, fontFamily: "var(--font-identification-05c)", letterSpacing: "0.22em", textTransform: "uppercase" }}>
+            <span className="inline-block px-3 py-1 text-xs mb-4" style={{ background: GOLD, color: OFF_WHITE, fontFamily: "var(--font-lora)", letterSpacing: "0.22em", textTransform: "uppercase" }}>
               Nossos Pilares
             </span>
             <h2 className="mt-4 mb-4 text-brand-off-white font-display text-4xl font-bold">8 Atributos da Timevision</h2>

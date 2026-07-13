@@ -741,9 +741,11 @@ export default function WorkOrderGenerator({ initialVenda, onClose, onSaveSucces
         } as any,
         laboratorioId: laboratorioId || undefined,
         laboratorioNome: laboratorios.find(l => l.id === laboratorioId)?.nome || undefined,
-        vendedorId: vendedorId || undefined,
-        vendedorNome: equipe.find(m => m.email === vendedorId)?.nome || initialVenda?.vendedorNome || undefined,
-        eventoId: eventoId || undefined,
+        vendedorId: initialVenda?.vendedorId || undefined,
+        vendedorNome: initialVenda?.vendedorNome || undefined,
+        eventoId: initialVenda?.eventoId || undefined,
+        vendedorId: initialVenda?.vendedorId || undefined,
+        vendedorNome: initialVenda?.vendedorNome || undefined,
         validadeOrcamento: isOrcamento ? new Date(new Date(orderDate).getTime() + 7 * 86400000).toISOString().split('T')[0] : undefined
       };
 
