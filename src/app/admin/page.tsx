@@ -813,7 +813,7 @@ export default function AdminPage() {
 
   // Financial Calculators
   const realSales = vendas.filter(v => {
-    if (v.status === 'orcamento') return false;
+    if (v.status === 'orcamento' || v.status === 'cancelado') return false;
     
     // Filter by Vendedor
     if (selectedVendedorId !== 'todos' && v.vendedorId !== selectedVendedorId) {
@@ -830,7 +830,7 @@ export default function AdminPage() {
   });
 
   const totalRevenue = realSales.reduce((acc, curr) => acc + curr.valorTotal, 0);
-  const totalCost = realSales.reduce((acc, curr) => acc + (curr.custoTotal || curr.valorTotal * 0.5), 0);
+  const totalCost = realSales.reduce((acc, curr) => acc + (curr.custoTotal || curr.valorTotal * 0.3), 0);
   const totalProfit = totalRevenue - totalCost;
   const averageMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
   const lowStockCount = produtos.filter(p => p.quantidade <= 3).length;
@@ -1812,6 +1812,7 @@ export default function AdminPage() {
                           <label className="text-[10px] font-bold uppercase text-slate-400">Quantidade</label>
                           <input
                             type="number"
+                            step="any"
                             name="quantidade"
                             defaultValue={editingProduto?.quantidade ?? 1}
                             className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-white"
@@ -1824,6 +1825,7 @@ export default function AdminPage() {
                           <label className="text-[10px] font-bold uppercase text-slate-400">Preço de Custo (R$)</label>
                           <input
                             type="number"
+                            step="any"
                             name="precoCusto"
                             defaultValue={editingProduto?.precoCusto ?? 0}
                             className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-white"
@@ -1834,6 +1836,7 @@ export default function AdminPage() {
                           <label className="text-[10px] font-bold uppercase text-slate-400">Preço de Venda (R$)</label>
                           <input
                             type="number"
+                            step="any"
                             name="precoVenda"
                             defaultValue={editingProduto?.precoVenda ?? 0}
                             className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-white"
