@@ -688,7 +688,8 @@ export default function AdminPage() {
       local: formData.get('local') as string,
       status: editingEvento?.status || 'ativo',
       criadoEm: editingEvento?.criadoEm || new Date().toISOString(),
-      criadoPor: editingEvento?.criadoPor || currentUser?.email || 'admin@timevision.com.br'
+      criadoPor: editingEvento?.criadoPor || currentUser?.email || 'admin@timevision.com.br',
+      cor: editingEvento?.cor || ['bg-blue-500', 'bg-purple-500', 'bg-rose-500', 'bg-amber-500', 'bg-emerald-500', 'bg-cyan-500', 'bg-fuchsia-500'][Math.floor(Math.random() * 7)]
     };
 
     if (!eventData.nome || !eventData.data) {
@@ -727,7 +728,7 @@ export default function AdminPage() {
   };
 
   // 7. POS Sale & OS/Budget Generation Trigger
-  const handlePdvSale = (e: React.FormEvent, type: 'venda' | 'orcamento') => {
+  const handlePdvSale = async (e: React.FormEvent, type: 'venda' | 'orcamento') => {
     e.preventDefault();
     if (!pdvClienteId || (!pdvFrameId && !pdvLensId)) {
       toast({
@@ -741,6 +742,11 @@ export default function AdminPage() {
 
     const client = clientes.find(c => c.id === pdvClienteId);
     if (!client) return;
+
+    // Automatically bind the client to the event
+    if (pdvEventoId && client.eventoId !== pdvEventoId) {
+      await saveItem('clientes', { ...client, eventoId: pdvEventoId });
+    }
 
     const frame = produtos.find(p => p.id === pdvFrameId);
     const lens = produtos.find(p => p.id === pdvLensId);
@@ -841,7 +847,7 @@ export default function AdminPage() {
     
     // Filter by Evento
     if (selectedEventoId !== 'todos') {
-      if (selectedEventoId === 'loja' && v.eventoId) return false;
+      if (selectedEventoId === 'loja' && v.eventoId && v.eventoId !== 'loja') return false;
       if (selectedEventoId !== 'loja' && v.eventoId !== selectedEventoId) return false;
     }
     
@@ -1369,7 +1375,7 @@ export default function AdminPage() {
                     if (v.status !== col.id) return false;
                     if (selectedVendedorId !== 'todos' && v.vendedorId !== selectedVendedorId) return false;
                     if (selectedEventoId !== 'todos') {
-                      if (selectedEventoId === 'loja' && v.eventoId) return false;
+                      if (selectedEventoId === 'loja' && v.eventoId && v.eventoId !== 'loja') return false;
                       if (selectedEventoId !== 'loja' && v.eventoId !== selectedEventoId) return false;
                     }
                     return true;
@@ -1411,11 +1417,18 @@ export default function AdminPage() {
                             <div className="text-[10px] text-slate-400 uppercase">Valor: <span className="font-bold text-slate-300">R$ {v.valorTotal.toFixed(2)}</span></div>
                             <div className="text-[10px] text-slate-500 mt-1">{new Date(v.dataVenda).toLocaleDateString('pt-BR')}</div>
                             
-                            {v.eventoId && (
-                              <span className="absolute bottom-2 right-2 text-[8px] uppercase tracking-wider bg-primary/10 text-primary border border-primary/30 px-1.5 py-0.5 rounded font-bold">
-                                Ev: {eventos.find(ev => ev.id === v.eventoId)?.nome || 'Promocional'}
-                              </span>
-                            )}
+                            {v.eventoId && (() => {
+                              if (v.eventoId === 'loja') {
+                                return <span className="absolute bottom-2 right-2 text-[8px] uppercase tracking-wider bg-slate-800 text-slate-300 border border-slate-700 px-1.5 py-0.5 rounded font-bold shadow">LOJA</span>;
+                              }
+                              const ev = eventos.find(e => e.id === v.eventoId);
+                              const colorClass = ev?.cor || 'bg-primary';
+                              return (
+                                <span className={`absolute bottom-2 right-2 text-[8px] uppercase tracking-wider ${colorClass} text-white px-1.5 py-0.5 rounded font-bold shadow`}>
+                                  {ev?.nome || 'Promocional'}
+                                </span>
+                              );
+                            })()}
                           </div>
                         ))}
                         {colOrders.length === 0 && (
@@ -1675,7 +1688,21 @@ export default function AdminPage() {
                   <Card key={c.id} className="bg-slate-900 border-slate-800 shadow-md">
                     <CardHeader className="pb-3 flex flex-row justify-between items-start">
                       <div>
-                        <CardTitle className="text-lg font-bold">{c.nome}</CardTitle>
+                        <div className="flex items-center gap-2">
+                          <CardTitle className="text-lg font-bold">{c.nome}</CardTitle>
+                          {c.eventoId && (() => {
+                              if (c.eventoId === 'loja') {
+                                return <span className="text-[9px] uppercase tracking-wider bg-slate-800 text-slate-300 border border-slate-700 px-1.5 py-0.5 rounded-full font-bold shadow">LOJA</span>;
+                              }
+                              const ev = eventos.find(e => e.id === c.eventoId);
+                              const colorClass = ev?.cor || 'bg-primary';
+                              return (
+                                <span className={`text-[9px] uppercase tracking-wider ${colorClass} text-white px-1.5 py-0.5 rounded-full font-bold shadow`}>
+                                  {ev?.nome || 'Promocional'}
+                                </span>
+                              );
+                          })()}
+                        </div>
                         <CardDescription className="text-xs text-slate-450 mt-1">CPF: {c.cpf}</CardDescription>
                       </div>
                       <div className="flex gap-1.5">
