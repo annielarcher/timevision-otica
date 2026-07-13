@@ -716,6 +716,8 @@ export default function WorkOrderGenerator({ initialVenda, onClose, onSaveSucces
         } as any,
         laboratorioId: laboratorioId || undefined,
         laboratorioNome: laboratorios.find(l => l.id === laboratorioId)?.nome || undefined,
+        vendedorId: initialVenda?.vendedorId || undefined,
+        vendedorNome: initialVenda?.vendedorNome || undefined,
         eventoId: initialVenda?.eventoId || undefined,
         vendedorId: initialVenda?.vendedorId || undefined,
         vendedorNome: initialVenda?.vendedorNome || undefined,
