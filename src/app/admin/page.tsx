@@ -1252,7 +1252,37 @@ export default function AdminPage() {
         {activeTab === 'dash' && (
           <div className="space-y-6">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-              <h2 className="text-2xl font-headline font-bold">Visão Geral & Finanças</h2>
+              <h2 className="text-2xl font-headline font-bold flex items-center gap-2">
+                Visão Geral & Finanças
+                {currentUser?.email === 'admin@timevision.com.br' && (
+                  <button 
+                    onClick={async () => {
+                      if (!confirm('Vincular todas as vendas sem consultor ao Moisés?')) return;
+                      try {
+                        const moises = equipe.find(e => e.nome.toLowerCase().includes('moisés') || e.nome.toLowerCase().includes('moises'));
+                        if (!moises) return alert('Consultor Moisés não encontrado na equipe!');
+                        const vendasAll = await getItems<Venda>('vendas');
+                        let updated = 0;
+                        for (const v of vendasAll) {
+                          if (!v.vendedorId || v.vendedorId === 'admin@timevision.com.br') {
+                            v.vendedorId = moises.email;
+                            v.vendedorNome = moises.nome;
+                            await saveItem('vendas', v);
+                            updated++;
+                          }
+                        }
+                        alert(`Pronto! ${updated} vendas antigas foram vinculadas ao consultor Moisés.`);
+                        loadData();
+                      } catch (err) {
+                        alert('Erro ao atualizar vendas: ' + err);
+                      }
+                    }}
+                    className="text-[10px] bg-amber-500/20 text-amber-500 hover:bg-amber-500 hover:text-white px-2 py-1 rounded transition-colors"
+                  >
+                    Vincular Antigas ao Moisés
+                  </button>
+                )}
+              </h2>
               <div className="flex flex-wrap gap-3">
                 {/* Vendedor Filter */}
                 <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs">
@@ -1727,6 +1757,12 @@ export default function AdminPage() {
                       <div><span className="font-bold text-slate-450 uppercase text-[9px] block">Telefone</span> {c.telefone}</div>
                       <div><span className="font-bold text-slate-450 uppercase text-[9px] block">E-mail</span> {c.email || 'Não informado'}</div>
                       <div><span className="font-bold text-slate-450 uppercase text-[9px] block">Endereço</span> {c.endereco}</div>
+                      <div>
+                        <span className="font-bold text-slate-450 uppercase text-[9px] block mt-1">Consultor(a) Responsável</span> 
+                        <span className="text-amber-500/90 font-medium">
+                          {equipe.find(m => m.email === c.cadastradoPor)?.nome || (c.cadastradoPor === 'admin@timevision.com.br' ? 'Administrador' : c.cadastradoPor || 'ADM')}
+                        </span>
+                      </div>
                       
                       {/* Prescription history snippet */}
                       {customerPrescriptions.length > 0 && (
