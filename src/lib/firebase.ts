@@ -141,6 +141,8 @@ export interface Venda {
     parcelas: string;
     sinal: number;
     pagamentoNaEntrega?: boolean;
+    parcelasPagas?: { [key: number]: boolean };
+    datasVencimento?: { [key: number]: string };
   };
   validadeOrcamento?: string;
   vendedorId?: string; // Tracks team member email

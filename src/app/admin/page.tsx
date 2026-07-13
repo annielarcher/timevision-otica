@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   TrendingUp, Users, Package, ShoppingCart, Sparkles, LogOut, Lock, 
   Search, Plus, Trash2, Edit3, CheckCircle, Clock, Eye, AlertTriangle, Calendar, FlaskConical, Ban,
-  DollarSign, Percent, Heart, ShieldAlert, HelpCircle
+  DollarSign, Percent, Heart, ShieldAlert, HelpCircle, Send, AlertCircle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -76,6 +76,7 @@ export default function AdminPage() {
   const [fiscalCertSenha, setFiscalCertSenha] = useState('');
   const [fiscalCertBase64, setFiscalCertBase64] = useState('');
   const [isFiscalHelpOpen, setIsFiscalHelpOpen] = useState(false);
+  const [selectedMonthFilter, setSelectedMonthFilter] = useState<string>('todos');
 
   // Multi-user Auth states
   const [currentUser, setCurrentUser] = useState<{ email: string; nome: string } | null>(null);
@@ -1007,6 +1008,35 @@ export default function AdminPage() {
       });
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleMarkInstallmentAsPaid = async (venda: Venda, installmentIndex: number) => {
+    try {
+      const updatedPagamento = {
+        ...(venda.pagamento || { metodo: 'Boleto', parcelas: '1x', sinal: 0 }),
+        parcelasPagas: {
+          ...(venda.pagamento?.parcelasPagas || {}),
+          [installmentIndex]: true
+        }
+      };
+      const updated: Venda = {
+        ...venda,
+        pagamento: updatedPagamento
+      };
+      await saveItem('vendas', updated);
+      toast({
+        title: 'Parcela Recebida',
+        description: `Parcela ${installmentIndex} do pedido ${venda.id} marcada como paga com sucesso.`,
+      });
+      loadData();
+    } catch (err: any) {
+      console.error(err);
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao Atualizar',
+        description: 'Não foi possível registrar o pagamento da parcela.',
+      });
+    }
   };
 
   // 7. POS Sale & OS/Budget Generation Trigger
@@ -2745,39 +2775,220 @@ export default function AdminPage() {
 
         {/* TABA 8: GESTÃO FINANCEIRA */}
         {activeTab === 'financeiro' && (() => {
-          const nonCanceledSales = vendas.filter(v => v.status !== 'cancelado' && v.status !== 'orcamento');
-          const faturamentoBruto = nonCanceledSales.reduce((acc, v) => acc + (v.isDoacao ? 0 : (v.valorTotal || 0)), 0);
-          const custoProdutos = nonCanceledSales.reduce((acc, v) => acc + (v.custoTotal || 0), 0);
-          const custoErros = nonCanceledSales.reduce((acc, v) => acc + (v.custoErroRefazerLente || 0) + (v.custoErroDevolucao || 0) + (v.custoErroDesconto || 0), 0);
-          const taxasCartao = nonCanceledSales.reduce((acc, v) => acc + (v.taxaCartaoJuros || 0), 0);
-          const totalDespesasOperacionais = despesas.reduce((acc, d) => acc + (d.valor || 0), 0);
+          // Extract unique months from sales and despesas
+          const allMonthsSet = new Set<string>();
+          vendas.forEach(v => {
+            if (v.dataVenda && v.dataVenda.length >= 7) {
+              allMonthsSet.add(v.dataVenda.substring(0, 7));
+            }
+          });
+          despesas.forEach(d => {
+            if (d.data && d.data.length >= 7) {
+              allMonthsSet.add(d.data.substring(0, 7));
+            }
+          });
+          const availableMonths = Array.from(allMonthsSet).sort((a, b) => b.localeCompare(a));
+
+          // Filter collections by month if a month filter is selected
+          const filteredSalesForMonth = vendas.filter(v => {
+            if (v.status === 'cancelado' || v.status === 'orcamento') return false;
+            if (selectedMonthFilter !== 'todos') {
+              return v.dataVenda && v.dataVenda.substring(0, 7) === selectedMonthFilter;
+            }
+            return true;
+          });
+
+          const filteredDespesasForMonth = despesas.filter(d => {
+            if (selectedMonthFilter !== 'todos') {
+              return d.data && d.data.substring(0, 7) === selectedMonthFilter;
+            }
+            return true;
+          });
+
+          // Metrics calculations based on the filtered records
+          const faturamentoBruto = filteredSalesForMonth.reduce((acc, v) => acc + (v.isDoacao ? 0 : (v.valorTotal || 0)), 0);
+          const custoProdutos = filteredSalesForMonth.reduce((acc, v) => acc + (v.custoTotal || 0), 0);
+          const custoErros = filteredSalesForMonth.reduce((acc, v) => acc + (v.custoErroRefazerLente || 0) + (v.custoErroDevolucao || 0) + (v.custoErroDesconto || 0), 0);
+          const taxasCartao = filteredSalesForMonth.reduce((acc, v) => acc + (v.taxaCartaoJuros || 0), 0);
+          const totalDespesasOperacionais = filteredDespesasForMonth.reduce((acc, d) => acc + (d.valor || 0), 0);
           const taxRate = taxSimplesNacionalBracket === 'bracket1' ? 0.04 : taxSimplesNacionalBracket === 'bracket2' ? 0.073 : 0.095;
           const impostosEstimados = faturamentoBruto * taxRate;
           const custosTotais = custoProdutos + totalDespesasOperacionais + custoErros + taxasCartao + impostosEstimados;
           const lucroLiquido = faturamentoBruto - custosTotais;
+
+          // Cash Flow Projections (Next 6 months starting from current month)
+          const today = new Date();
+          const next6Months = Array.from({ length: 6 }).map((_, idx) => {
+            const date = new Date(today.getFullYear(), today.getMonth() + idx, 1);
+            const key = date.toISOString().substring(0, 7); // YYYY-MM
+            
+            // Format to Pt-BR
+            const monthName = date.toLocaleString('pt-BR', { month: 'long' });
+            const capitalizedMonth = monthName.charAt(0).toUpperCase() + monthName.slice(1);
+            
+            return {
+              key,
+              label: `${capitalizedMonth} / ${date.getFullYear()}`,
+              entradas: 0,
+              saidas: 0
+            };
+          });
+
+          // Distribute Inflows (Entradas)
+          vendas.forEach(v => {
+            if (v.status === 'cancelado' || v.status === 'orcamento') return;
+            const saleDateObj = new Date(v.dataVenda);
+            if (isNaN(saleDateObj.getTime())) return;
+            
+            const total = v.isDoacao ? 0 : (v.valorTotal || 0);
+            const method = v.pagamento?.metodo || 'Cartão de Crédito';
+            const installmentsStr = v.pagamento?.parcelas || '1x';
+            const numInstallments = parseInt(installmentsStr) || 1;
+            const sinal = v.pagamento?.sinal || 0;
+            const remaining = total - sinal;
+            
+            // Sinal is received in the month of the sale
+            const saleMonthKey = v.dataVenda.substring(0, 7);
+            const sinalProj = next6Months.find(m => m.key === saleMonthKey);
+            if (sinalProj) {
+              sinalProj.entradas += sinal;
+            }
+            
+            // Remaining balance
+            if (method === 'Cartão de Crédito' || numInstallments === 1) {
+              // Cartão/1x is received immediately in full
+              if (sinalProj) {
+                sinalProj.entradas += remaining;
+              }
+            } else {
+              // Custom installments (Boleto/Crediário) are split over subsequent months
+              const installmentValue = remaining / numInstallments;
+              for (let i = 1; i <= numInstallments; i++) {
+                const dueDate = new Date(saleDateObj.getFullYear(), saleDateObj.getMonth() + i, saleDateObj.getDate());
+                const dueMonthKey = dueDate.toISOString().substring(0, 7);
+                const dueProj = next6Months.find(m => m.key === dueMonthKey);
+                if (dueProj) {
+                  dueProj.entradas += installmentValue;
+                }
+              }
+            }
+          });
+
+          // Distribute Outflows (Saídas)
+          despesas.forEach(d => {
+            const depMonthKey = d.data.substring(0, 7);
+            const proj = next6Months.find(m => m.key === depMonthKey);
+            if (proj) {
+              proj.saidas += d.valor;
+            }
+          });
+
+          // Build list of installment details for non-credit card parcelled sales
+          interface InstallmentItem {
+            id: string;
+            saleId: string;
+            clienteNome: string;
+            clienteTelefone: string;
+            metodo: string;
+            parcelaLabel: string;
+            valor: number;
+            dataVencimento: string;
+            isPaga: boolean;
+            isAtrasada: boolean;
+            vendaOriginal: Venda;
+            index: number;
+          }
+
+          const installmentAlerts: InstallmentItem[] = [];
+          const todayStr = today.toISOString().split('T')[0];
+
+          vendas.forEach(v => {
+            if (v.status === 'cancelado' || v.status === 'orcamento') return;
+            const method = v.pagamento?.metodo || '';
+            const installmentsStr = v.pagamento?.parcelas || '1x';
+            const numInstallments = parseInt(installmentsStr) || 1;
+            
+            if (method !== 'Cartão de Crédito' && numInstallments > 1) {
+              const saleDateObj = new Date(v.dataVenda);
+              if (isNaN(saleDateObj.getTime())) return;
+              
+              const total = v.valorTotal || 0;
+              const sinal = v.pagamento?.sinal || 0;
+              const remaining = total - sinal;
+              const installmentValue = remaining / numInstallments;
+              
+              for (let i = 1; i <= numInstallments; i++) {
+                const isPaga = v.pagamento?.parcelasPagas?.[i] || false;
+                
+                let dueDateStr = v.pagamento?.datasVencimento?.[i];
+                if (!dueDateStr) {
+                  const dueDate = new Date(saleDateObj.getFullYear(), saleDateObj.getMonth() + i, saleDateObj.getDate());
+                  dueDateStr = dueDate.toISOString().split('T')[0];
+                }
+                
+                const isAtrasada = !isPaga && dueDateStr < todayStr;
+                
+                installmentAlerts.push({
+                  id: `${v.id}-p${i}`,
+                  saleId: v.id,
+                  clienteNome: v.clienteNome,
+                  clienteTelefone: v.clienteTelefone || '',
+                  metodo: method,
+                  parcelaLabel: `${i}/${numInstallments}`,
+                  valor: installmentValue,
+                  dataVencimento: dueDateStr,
+                  isPaga,
+                  isAtrasada,
+                  vendaOriginal: v,
+                  index: i
+                });
+              }
+            }
+          });
 
           return (
             <div className="space-y-8 animate-in fade-in duration-300">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
                 <div>
                   <h2 className="text-2xl font-headline font-bold">Gestão Financeira Integrada</h2>
-                  <p className="text-sm text-slate-450">Demonstração de resultados, auditoria tributária, custos operacionais e controle de doações.</p>
+                  <p className="text-sm text-slate-450">Demonstração de resultados, fluxo de caixa, custos operacionais e doações por meses.</p>
                 </div>
-                <div className="flex bg-slate-950 p-1 rounded-lg border border-slate-850 self-start">
-                  <button
-                    type="button"
-                    onClick={() => setFinanceiroSubTab('geral')}
-                    className={`px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-md transition-all ${financeiroSubTab === 'geral' ? 'bg-primary text-primary-foreground font-black' : 'text-slate-400 hover:text-white'}`}
-                  >
-                    Resumo e Lançamentos
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFinanceiroSubTab('fiscal')}
-                    className={`px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-md transition-all ${financeiroSubTab === 'fiscal' ? 'bg-primary text-primary-foreground font-black' : 'text-slate-400 hover:text-white'}`}
-                  >
-                    Configurações Fiscais
-                  </button>
+                <div className="flex flex-wrap items-center gap-3 self-start md:self-center">
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs font-bold uppercase text-slate-400">Filtrar Mês:</label>
+                    <select
+                      value={selectedMonthFilter}
+                      onChange={(e) => setSelectedMonthFilter(e.target.value)}
+                      className="bg-slate-950 border border-slate-850 rounded-lg p-2 text-xs text-white focus:outline-none"
+                    >
+                      <option value="todos">Todos os Meses</option>
+                      {availableMonths.map(m => {
+                        const [year, month] = m.split('-');
+                        const monthName = new Date(Number(year), Number(month) - 1, 1).toLocaleString('pt-BR', { month: 'long' });
+                        return (
+                          <option key={m} value={m}>
+                            {monthName.charAt(0).toUpperCase() + monthName.slice(1)} / {year}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+                  <div className="flex bg-slate-950 p-1 rounded-lg border border-slate-850">
+                    <button
+                      type="button"
+                      onClick={() => setFinanceiroSubTab('geral')}
+                      className={`px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-md transition-all ${financeiroSubTab === 'geral' ? 'bg-primary text-primary-foreground font-black' : 'text-slate-400 hover:text-white'}`}
+                    >
+                      Resumo e Lançamentos
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFinanceiroSubTab('fiscal')}
+                      className={`px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-md transition-all ${financeiroSubTab === 'fiscal' ? 'bg-primary text-primary-foreground font-black' : 'text-slate-400 hover:text-white'}`}
+                    >
+                      Configurações Fiscais
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -2980,7 +3191,7 @@ export default function AdminPage() {
                     </Card>
                   </div>
 
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                     
                     {/* Box 1: Simples Nacional Bracket Simulator */}
                     <Card className="bg-slate-900 border-slate-800 lg:col-span-1 shadow">
@@ -2988,7 +3199,7 @@ export default function AdminPage() {
                         <CardTitle className="text-lg font-bold text-slate-200 flex items-center gap-2">
                           <Percent className="text-brand-gold h-5 w-5" /> Simulador de Impostos (Anexo I)
                         </CardTitle>
-                        <CardDescription>Configure a faixa de enquadramento do Simples Nacional comercial.</CardDescription>
+                        <CardDescription>Configure a faixa de enquadramento do Simples Nacional.</CardDescription>
                       </CardHeader>
                       <CardContent className="space-y-4">
                         <div className="flex flex-col gap-1.5">
@@ -3018,8 +3229,37 @@ export default function AdminPage() {
                           </div>
                         </div>
                         <div className="text-[10px] text-slate-500 italic">
-                          *Estimativa com base na Lei Complementar 123/2006. O cálculo real de recolhimento via DAS dependerá das deduções e receita bruta acumulada.
+                          *Estimativa de DAS comercial básica.
                         </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Box 3: Cash Flow Projections */}
+                    <Card className="bg-slate-900 border-slate-800 lg:col-span-1 shadow">
+                      <CardHeader>
+                        <CardTitle className="text-lg font-bold text-slate-200 flex items-center gap-2">
+                          <TrendingUp className="text-brand-gold h-5 w-5" /> Fluxo de Caixa Previsto
+                        </CardTitle>
+                        <CardDescription>Entradas e saídas operacionais projetadas para 6 meses.</CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
+                        {next6Months.map(m => {
+                          const saldo = m.entradas - m.saidas;
+                          return (
+                            <div key={m.key} className="flex justify-between items-center bg-slate-950/60 p-2 rounded border border-slate-850 text-xs">
+                              <div>
+                                <span className="text-[9px] font-black text-slate-400 block uppercase">{m.label}</span>
+                                <div className="flex gap-2 text-[8px] text-slate-500 mt-0.5">
+                                  <span>Entr: R$ {m.entradas.toFixed(0)}</span>
+                                  <span>Saí: R$ {m.saidas.toFixed(0)}</span>
+                                </div>
+                              </div>
+                              <span className={`font-black ${saldo >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                R$ {saldo.toFixed(2)}
+                              </span>
+                            </div>
+                          );
+                        })}
                       </CardContent>
                     </Card>
 
@@ -3117,10 +3357,10 @@ export default function AdminPage() {
 
                         {/* List of despesas */}
                         <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
-                          {despesas.length === 0 ? (
+                          {filteredDespesasForMonth.length === 0 ? (
                             <p className="text-xs text-slate-500 italic text-center py-4">Nenhum custo operacional registrado.</p>
                           ) : (
-                            despesas.slice().reverse().map(d => {
+                            filteredDespesasForMonth.slice().reverse().map(d => {
                               const evt = eventos.find(e => e.id === d.eventoId);
                               return (
                                 <div key={d.id} className="flex justify-between items-center bg-slate-950/60 p-3 rounded-lg border border-slate-850">
@@ -3184,12 +3424,12 @@ export default function AdminPage() {
                               </tr>
                             </thead>
                             <tbody>
-                              {vendas.length === 0 ? (
+                              {filteredSalesForMonth.length === 0 ? (
                                 <tr>
-                                  <td colSpan={7} className="py-6 text-center text-slate-500 italic">Nenhum pedido finalizado no sistema.</td>
+                                  <td colSpan={7} className="py-6 text-center text-slate-500 italic">Nenhum pedido finalizado neste período.</td>
                                 </tr>
                               ) : (
-                                vendas.slice().reverse().map(v => {
+                                filteredSalesForMonth.slice().reverse().map(v => {
                                   const errRefaz = v.custoErroRefazerLente || 0;
                                   const errDevol = v.custoErroDevolucao || 0;
                                   const errDesc = v.custoErroDesconto || 0;
@@ -3347,6 +3587,122 @@ export default function AdminPage() {
                     </Card>
                   </div>
 
+                  {/* Row 4: Controle de Parcelas & Alertas de Cobrança */}
+                  <div className="grid grid-cols-1 gap-6">
+                    <Card className="bg-slate-900 border-slate-800 shadow">
+                      <CardHeader className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                        <div>
+                          <CardTitle className="text-lg font-bold text-slate-200 flex items-center gap-2">
+                            <AlertCircle className="text-brand-gold h-5 w-5" /> Controle de Parcelas & Cobrança (Boleto/Crediário)
+                          </CardTitle>
+                          <CardDescription>
+                            Acompanhe os vencimentos de boletos/crediários, confirme recebimentos e envie lembretes de cobrança via WhatsApp.
+                          </CardDescription>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-xs border-collapse">
+                            <thead>
+                              <tr className="border-b border-slate-800 text-slate-400 uppercase tracking-widest text-[9px] font-bold">
+                                <th className="py-3 px-2">Pedido ID</th>
+                                <th className="py-3 px-2">Cliente / Telefone</th>
+                                <th className="py-3 px-2">Parcela</th>
+                                <th className="py-3 px-2">Valor</th>
+                                <th className="py-3 px-2">Vencimento</th>
+                                <th className="py-3 px-2">Status</th>
+                                <th className="py-3 px-2 text-right">Ações</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {installmentAlerts.length === 0 ? (
+                                <tr>
+                                  <td colSpan={7} className="py-6 text-center text-slate-500 italic">Nenhum parcelamento (Boleto/Crediário) cadastrado no sistema.</td>
+                                </tr>
+                              ) : (
+                                installmentAlerts.map(inst => {
+                                  const [year, month, day] = inst.dataVencimento.split('-');
+                                  const formattedDueDate = `${day}/${month}/${year}`;
+                                  
+                                  const cleanPhone = inst.clienteTelefone.replace(/\D/g, '');
+                                  const formattedPhone = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
+                                  
+                                  const messageText = inst.isAtrasada
+                                    ? `Olá ${inst.clienteNome}, tudo bem? Identificamos que a parcela ${inst.parcelaLabel} no valor de R$ ${inst.valor.toFixed(2)}, com vencimento em ${formattedDueDate}, referente à sua Ordem de Serviço #${inst.saleId}, está pendente. Poderia por gentileza nos enviar o comprovante de pagamento? Obrigado!`
+                                    : `Olá ${inst.clienteNome}, tudo bem? Lembramos que a parcela ${inst.parcelaLabel} no valor de R$ ${inst.valor.toFixed(2)}, referente à sua Ordem de Serviço #${inst.saleId}, vencerá em ${formattedDueDate}. Qualquer dúvida estamos à disposição!`;
+                                  
+                                  const encodedMessage = encodeURIComponent(messageText);
+                                  const waUrl = `https://wa.me/${formattedPhone}?text=${encodedMessage}`;
+
+                                  return (
+                                    <tr key={inst.id} className="border-b border-slate-850 hover:bg-slate-950/40">
+                                      <td className="py-4 px-2 font-mono font-bold text-slate-350">
+                                        {inst.saleId}
+                                      </td>
+                                      <td className="py-4 px-2">
+                                        <div className="font-bold text-white">{inst.clienteNome}</div>
+                                        <div className="text-[10px] text-slate-500">{inst.clienteTelefone || 'Sem telefone'}</div>
+                                      </td>
+                                      <td className="py-4 px-2 font-bold text-slate-400">
+                                        {inst.parcelaLabel}
+                                      </td>
+                                      <td className="py-4 px-2 font-black text-slate-200">
+                                        R$ {inst.valor.toFixed(2)}
+                                      </td>
+                                      <td className="py-4 px-2 font-medium text-slate-300">
+                                        {formattedDueDate}
+                                      </td>
+                                      <td className="py-4 px-2">
+                                        {inst.isPaga ? (
+                                          <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[9px] px-2 py-0.5 rounded font-tagline uppercase font-bold flex items-center gap-1 w-fit">
+                                            <CheckCircle size={10} /> Pago
+                                          </span>
+                                        ) : inst.isAtrasada ? (
+                                          <span className="bg-red-500/10 text-red-500 border border-red-500/30 text-[9px] px-2 py-0.5 rounded font-tagline uppercase font-bold flex items-center gap-1 w-fit animate-pulse">
+                                            <AlertTriangle size={10} /> Atrasado
+                                          </span>
+                                        ) : (
+                                          <span className="bg-blue-500/10 text-blue-400 border border-blue-500/30 text-[9px] px-2 py-0.5 rounded font-tagline uppercase font-bold flex items-center gap-1 w-fit">
+                                            <Clock size={10} /> No Prazo
+                                          </span>
+                                        )}
+                                      </td>
+                                      <td className="py-4 px-2 text-right">
+                                        <div className="flex gap-2 justify-end">
+                                          {!inst.isPaga && (
+                                            <>
+                                              <Button
+                                                type="button"
+                                                onClick={() => handleMarkInstallmentAsPaid(inst.vendaOriginal, inst.index)}
+                                                className="bg-emerald-700 hover:bg-emerald-600 text-xs px-2.5 py-1.5 h-auto font-bold flex items-center gap-1"
+                                                title="Confirmar Recebimento"
+                                              >
+                                                <CheckCircle size={10} /> Confirmar Pago
+                                              </Button>
+                                              <a
+                                                href={waUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="inline-flex items-center justify-center bg-slate-950 border border-slate-800 text-brand-gold hover:bg-slate-850 hover:text-white rounded-lg text-xs font-bold px-3 py-1.5 h-auto transition-colors gap-1"
+                                                title="Cobrar via WhatsApp"
+                                              >
+                                                <Send size={10} /> Cobrar
+                                              </a>
+                                            </>
+                                          )}
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  );
+                                })
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+
                   {/* Row 3: Eyewear Donations trace panel */}
                   <div className="grid grid-cols-1 gap-6">
                     <Card className="bg-slate-900 border-slate-800 shadow">
@@ -3371,12 +3727,12 @@ export default function AdminPage() {
                               </tr>
                             </thead>
                             <tbody>
-                              {vendas.filter(v => v.isDoacao).length === 0 ? (
+                              {filteredSalesForMonth.filter(v => v.isDoacao).length === 0 ? (
                                 <tr>
-                                  <td colSpan={7} className="py-6 text-center text-slate-500 italic">Nenhuma doação cadastrada no sistema.</td>
+                                  <td colSpan={7} className="py-6 text-center text-slate-500 italic">Nenhuma doação cadastrada neste período.</td>
                                 </tr>
                               ) : (
-                                vendas.filter(v => v.isDoacao).slice().reverse().map(v => {
+                                filteredSalesForMonth.filter(v => v.isDoacao).slice().reverse().map(v => {
                                   const evt = eventos.find(e => e.id === v.eventoId);
                                   const frame = v.produtos?.find(p => p.id === 'arm-id')?.nome || 'Armação Padrão';
                                   const lens = v.produtos?.find(p => p.id === 'lens-id' || p.id === 'lens')?.nome || 'Lente Corretiva';
