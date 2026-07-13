@@ -1474,8 +1474,10 @@ export default function AdminPage() {
                         value={pdvEventoId}
                         onChange={(e) => setPdvEventoId(e.target.value)}
                         className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-sm text-white focus:outline-none"
+                        required
                       >
                         <option value="">Nenhum evento...</option>
+                        <option value="loja">Loja</option>
                         {eventos.filter(ev => ev.status === 'ativo').map(ev => (
                           <option key={ev.id} value={ev.id}>{ev.nome}</option>
                         ))}
