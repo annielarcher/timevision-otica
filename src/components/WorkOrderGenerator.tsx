@@ -80,6 +80,7 @@ export default function WorkOrderGenerator({ initialVenda, onClose, onSaveSucces
   const [currentUser, setCurrentUser] = useState<any>(null);
 
   const [isExporting, setIsExporting] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -741,11 +742,9 @@ export default function WorkOrderGenerator({ initialVenda, onClose, onSaveSucces
         } as any,
         laboratorioId: laboratorioId || undefined,
         laboratorioNome: laboratorios.find(l => l.id === laboratorioId)?.nome || undefined,
-        vendedorId: initialVenda?.vendedorId || undefined,
-        vendedorNome: initialVenda?.vendedorNome || undefined,
-        eventoId: initialVenda?.eventoId || undefined,
-        vendedorId: initialVenda?.vendedorId || undefined,
-        vendedorNome: initialVenda?.vendedorNome || undefined,
+        vendedorId: vendedorId || undefined,
+        vendedorNome: equipe.find(m => m.email === vendedorId)?.nome || initialVenda?.vendedorNome || undefined,
+        eventoId: eventoId || undefined,
         validadeOrcamento: isOrcamento ? new Date(new Date(orderDate).getTime() + 7 * 86400000).toISOString().split('T')[0] : undefined
       };
 
@@ -761,6 +760,84 @@ export default function WorkOrderGenerator({ initialVenda, onClose, onSaveSucces
       });
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  const handleSaveChangesOnly = async () => {
+    setIsSaving(true);
+    try {
+      const newVenda: Venda = {
+        id: orderNumber,
+        clienteId: initialVenda?.clienteId || `cli-${Math.floor(1000 + Math.random() * 9000)}`,
+        clienteNome: clientName,
+        clienteCpf: clientCpf,
+        clienteEmail: clientEmail,
+        clienteEndereco: clientAddress,
+        clienteTelefone: clientPhone,
+        produtos: [
+          { id: 'arm-id', nome: frameModel, quantidade: 1, precoVenda: priceTotal * 0.4, precoCusto: priceTotal * 0.2 },
+          { id: 'lens-id', nome: lensType, quantity: 1, precoVenda: priceTotal * 0.6, precoCusto: priceTotal * 0.3 } as any
+        ],
+        valorTotal: priceTotal,
+        custoTotal: priceTotal * 0.3,
+        lucroTotal: priceTotal * 0.7,
+        receita: {
+          longeEsfericoOD,
+          longeEsfericoOE,
+          longeCilindricoOD,
+          longeCilindricoOE,
+          longeEixoOD,
+          longeEixoOE,
+          longeDnpOD,
+          longeDnpOE,
+          longeAlturaOD,
+          longeAlturaOE,
+          pertoEsfericoOD,
+          pertoEsfericoOE,
+          pertoCilindricoOD,
+          pertoCilindricoOE,
+          pertoEixoOD,
+          pertoEixoOE,
+          pertoDnpOD,
+          pertoDnpOE,
+          pertoAlturaOD,
+          pertoAlturaOE,
+          adicao,
+          codigoLente,
+          dataReceita
+        } as any,
+        status: initialVenda?.status || 'recebido',
+        dataVenda: orderDate,
+        pagamento: {
+          metodo: paymentMethod,
+          parcelas: installments,
+          sinal: payOnDelivery ? Number(downPayment) : priceTotal,
+          pagamentoNaEntrega: payOnDelivery
+        } as any,
+        laboratorioId: laboratorioId || undefined,
+        laboratorioNome: laboratorios.find(l => l.id === laboratorioId)?.nome || undefined,
+        vendedorId: vendedorId || undefined,
+        vendedorNome: equipe.find(m => m.email === vendedorId)?.nome || initialVenda?.vendedorNome || undefined,
+        eventoId: eventoId || undefined,
+        validadeOrcamento: isOrcamento ? new Date(new Date(orderDate).getTime() + 7 * 86400000).toISOString().split('T')[0] : undefined
+      };
+
+      await saveItem('vendas', newVenda);
+      toast({
+        title: 'Sucesso',
+        description: 'Alterações salvas com sucesso!',
+      });
+      if (onSaveSuccess) onSaveSuccess();
+      if (onClose) onClose();
+    } catch (error) {
+      console.error('Error saving changes:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Erro',
+        description: 'Erro ao salvar as alterações.',
+      });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -1132,6 +1209,16 @@ export default function WorkOrderGenerator({ initialVenda, onClose, onSaveSucces
 
         {/* Buttons */}
         <div className="flex gap-3 pt-4 border-t border-slate-800">
+          {initialVenda?.id && (
+            <Button
+              onClick={handleSaveChangesOnly}
+              disabled={isSaving}
+              type="button"
+              className="flex-1 bg-green-700 hover:bg-green-600 text-white text-sm font-bold gap-2 py-5"
+            >
+              {isSaving ? 'Salvando...' : 'Salvar Alterações'}
+            </Button>
+          )}
           <Button
             onClick={handleExportPDF}
             disabled={isExporting}
