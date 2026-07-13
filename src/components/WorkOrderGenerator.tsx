@@ -697,6 +697,35 @@ export default function WorkOrderGenerator({ initialVenda, onClose, onSaveSucces
         description: isOrcamento ? 'Orçamento PDF gerado e baixado com sucesso!' : 'Ordem de Serviço PDF gerada e baixada com sucesso!',
       });
       
+      const numInstallments = parseInt(installments) || 1;
+      const isParceladoNaoCartao = paymentMethod !== 'Cartão de Crédito' && numInstallments > 1;
+
+      let datasVencimento: { [key: number]: string } = initialVenda?.pagamento?.datasVencimento || {};
+      let parcelasPagas: { [key: number]: boolean } = initialVenda?.pagamento?.parcelasPagas || {};
+
+      if (isParceladoNaoCartao) {
+        const saleDateObj = new Date(orderDate);
+        for (let i = 1; i <= numInstallments; i++) {
+          if (!datasVencimento[i]) {
+            const dueDate = new Date(saleDateObj.getFullYear(), saleDateObj.getMonth() + i, saleDateObj.getDate());
+            datasVencimento[i] = dueDate.toISOString().split('T')[0];
+          }
+          if (parcelasPagas[i] === undefined) {
+            parcelasPagas[i] = false;
+          }
+        }
+        Object.keys(datasVencimento).forEach(keyStr => {
+          const k = parseInt(keyStr);
+          if (k > numInstallments) {
+            delete datasVencimento[k];
+            delete parcelasPagas[k];
+          }
+        });
+      } else {
+        datasVencimento = {};
+        parcelasPagas = {};
+      }
+
       // Save order to LocalStorage/Firebase
       const newVenda: Venda = {
         id: orderNumber,
@@ -745,7 +774,9 @@ export default function WorkOrderGenerator({ initialVenda, onClose, onSaveSucces
           metodo: paymentMethod,
           parcelas: installments,
           sinal: payOnDelivery ? Number(downPayment) : priceTotal,
-          pagamentoNaEntrega: payOnDelivery
+          pagamentoNaEntrega: payOnDelivery,
+          parcelasPagas: isParceladoNaoCartao ? parcelasPagas : undefined,
+          datasVencimento: isParceladoNaoCartao ? datasVencimento : undefined
         } as any,
         laboratorioId: laboratorioId || undefined,
         laboratorioNome: laboratorios.find(l => l.id === laboratorioId)?.nome || undefined,
@@ -773,6 +804,35 @@ export default function WorkOrderGenerator({ initialVenda, onClose, onSaveSucces
   const handleSaveChangesOnly = async () => {
     setIsSaving(true);
     try {
+      const numInstallments = parseInt(installments) || 1;
+      const isParceladoNaoCartao = paymentMethod !== 'Cartão de Crédito' && numInstallments > 1;
+
+      let datasVencimento: { [key: number]: string } = initialVenda?.pagamento?.datasVencimento || {};
+      let parcelasPagas: { [key: number]: boolean } = initialVenda?.pagamento?.parcelasPagas || {};
+
+      if (isParceladoNaoCartao) {
+        const saleDateObj = new Date(orderDate);
+        for (let i = 1; i <= numInstallments; i++) {
+          if (!datasVencimento[i]) {
+            const dueDate = new Date(saleDateObj.getFullYear(), saleDateObj.getMonth() + i, saleDateObj.getDate());
+            datasVencimento[i] = dueDate.toISOString().split('T')[0];
+          }
+          if (parcelasPagas[i] === undefined) {
+            parcelasPagas[i] = false;
+          }
+        }
+        Object.keys(datasVencimento).forEach(keyStr => {
+          const k = parseInt(keyStr);
+          if (k > numInstallments) {
+            delete datasVencimento[k];
+            delete parcelasPagas[k];
+          }
+        });
+      } else {
+        datasVencimento = {};
+        parcelasPagas = {};
+      }
+
       const newVenda: Venda = {
         id: orderNumber,
         clienteId: initialVenda?.clienteId || `cli-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -820,7 +880,9 @@ export default function WorkOrderGenerator({ initialVenda, onClose, onSaveSucces
           metodo: paymentMethod,
           parcelas: installments,
           sinal: payOnDelivery ? Number(downPayment) : priceTotal,
-          pagamentoNaEntrega: payOnDelivery
+          pagamentoNaEntrega: payOnDelivery,
+          parcelasPagas: isParceladoNaoCartao ? parcelasPagas : undefined,
+          datasVencimento: isParceladoNaoCartao ? datasVencimento : undefined
         } as any,
         laboratorioId: laboratorioId || undefined,
         laboratorioNome: laboratorios.find(l => l.id === laboratorioId)?.nome || undefined,
