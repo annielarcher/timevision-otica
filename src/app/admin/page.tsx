@@ -808,6 +808,25 @@ export default function AdminPage() {
       laboratorioNome: laboratorios.find(l => l.id === pdvLaboratorioId)?.nome
     };
 
+    let maxId = 1000;
+    const isOrcamento = type === 'orcamento';
+    const prefix = isOrcamento ? 'ORC-' : '';
+    
+    vendas.forEach(v => {
+      if (isOrcamento && v.id.startsWith('ORC-')) {
+        const num = parseInt(v.id.replace('ORC-', ''), 10);
+        if (!isNaN(num) && num > maxId) maxId = num;
+      } else if (!isOrcamento && !v.id.startsWith('ORC-')) {
+        const numMatch = v.id.match(/\d+/);
+        if (numMatch) {
+          const num = parseInt(numMatch[0], 10);
+          if (!isNaN(num) && num > maxId) maxId = num;
+        }
+      }
+    });
+
+    pendingVenda.id = `${prefix}${maxId + 1}`;
+
     setActiveOSVenda(pendingVenda);
   };
 
@@ -846,6 +865,30 @@ export default function AdminPage() {
 
   // Status updates in dashboard
   const handleUpdateStatus = async (vendaId: string, newStatus: any) => {
+    const venda = vendas.find(v => v.id === vendaId);
+    if (venda && venda.status === 'orcamento' && newStatus !== 'orcamento' && newStatus !== 'cancelado') {
+      // Conversion from Orcamento to Pedido
+      let maxId = 1000;
+      vendas.forEach(v => {
+        if (!v.id.startsWith('ORC-')) {
+          const numMatch = v.id.match(/\d+/);
+          if (numMatch) {
+            const num = parseInt(numMatch[0], 10);
+            if (!isNaN(num) && num > maxId) maxId = num;
+          }
+        }
+      });
+      const nextId = `${maxId + 1}`;
+      
+      const convertedVenda = { ...venda, id: nextId, status: newStatus };
+      await deleteItem('vendas', vendaId);
+      await saveItem('vendas', convertedVenda);
+      
+      toast({ title: 'Orçamento Convertido em Pedido', description: `Novo Pedido #${nextId} gerado com sucesso.` });
+      loadData();
+      return;
+    }
+
     await updateItemStatus('vendas', vendaId, newStatus);
     toast({ title: 'Status Atualizado', description: `Pedido #${vendaId} alterado com sucesso.` });
     loadData();
@@ -1299,7 +1342,7 @@ export default function AdminPage() {
                     className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-primary"
                   >
                     <option value="orcamento">Orçamento (7 dias)</option>
-                    <option value="recebido">Pedido Recebido</option>
+                    <option value="recebido">Novo Pedido</option>
                     <option value="laboratorio">No Laboratório</option>
                     <option value="montagem">Em Montagem</option>
                     <option value="pronto">Pronto p/ Entrega</option>
@@ -1315,7 +1358,7 @@ export default function AdminPage() {
               <div className="flex gap-4 overflow-x-auto pb-4 snap-x">
                 {[
                   { id: 'orcamento', label: 'Orçamento', color: 'border-slate-500 text-slate-400' },
-                  { id: 'recebido', label: 'Recebido', color: 'border-blue-500 text-blue-400' },
+                  { id: 'recebido', label: 'Novo Pedido', color: 'border-blue-500 text-blue-400' },
                   { id: 'laboratorio', label: 'Laboratório', color: 'border-amber-500 text-amber-400' },
                   { id: 'montagem', label: 'Montagem', color: 'border-purple-500 text-purple-400' },
                   { id: 'pronto', label: 'Pronto', color: 'border-green-500 text-green-400' },
