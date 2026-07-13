@@ -51,6 +51,7 @@ export interface Cliente {
   dataNascimento: string;
   criadoEm: string;
   cadastradoPor?: string; // Tracks team member email
+  eventoId?: string; // Links client to an event
 }
 
 export interface Produto {
@@ -170,6 +171,7 @@ export interface Evento {
   status: 'ativo' | 'arquivado';
   criadoEm: string;
   criadoPor?: string; // Team member email
+  cor?: string; // Event color badge
 }
 
 export interface MembroEquipe {

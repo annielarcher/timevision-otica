@@ -688,7 +688,8 @@ export default function AdminPage() {
       local: formData.get('local') as string,
       status: editingEvento?.status || 'ativo',
       criadoEm: editingEvento?.criadoEm || new Date().toISOString(),
-      criadoPor: editingEvento?.criadoPor || currentUser?.email || 'admin@timevision.com.br'
+      criadoPor: editingEvento?.criadoPor || currentUser?.email || 'admin@timevision.com.br',
+      cor: editingEvento?.cor || ['bg-blue-500', 'bg-purple-500', 'bg-rose-500', 'bg-amber-500', 'bg-emerald-500', 'bg-cyan-500', 'bg-fuchsia-500'][Math.floor(Math.random() * 7)]
     };
 
     if (!eventData.nome || !eventData.data) {
@@ -727,7 +728,7 @@ export default function AdminPage() {
   };
 
   // 7. POS Sale & OS/Budget Generation Trigger
-  const handlePdvSale = (e: React.FormEvent, type: 'venda' | 'orcamento') => {
+  const handlePdvSale = async (e: React.FormEvent, type: 'venda' | 'orcamento') => {
     e.preventDefault();
     if (!pdvClienteId || (!pdvFrameId && !pdvLensId)) {
       toast({
@@ -741,6 +742,11 @@ export default function AdminPage() {
 
     const client = clientes.find(c => c.id === pdvClienteId);
     if (!client) return;
+
+    // Automatically bind the client to the event
+    if (pdvEventoId && client.eventoId !== pdvEventoId) {
+      await saveItem('clientes', { ...client, eventoId: pdvEventoId });
+    }
 
     const frame = produtos.find(p => p.id === pdvFrameId);
     const lens = produtos.find(p => p.id === pdvLensId);
@@ -808,6 +814,25 @@ export default function AdminPage() {
       laboratorioNome: laboratorios.find(l => l.id === pdvLaboratorioId)?.nome
     };
 
+    let maxId = 1000;
+    const isOrcamento = type === 'orcamento';
+    const prefix = isOrcamento ? 'ORC-' : '';
+    
+    vendas.forEach(v => {
+      if (isOrcamento && v.id.startsWith('ORC-')) {
+        const num = parseInt(v.id.replace('ORC-', ''), 10);
+        if (!isNaN(num) && num > maxId) maxId = num;
+      } else if (!isOrcamento && !v.id.startsWith('ORC-')) {
+        const numMatch = v.id.match(/\d+/);
+        if (numMatch) {
+          const num = parseInt(numMatch[0], 10);
+          if (!isNaN(num) && num > maxId) maxId = num;
+        }
+      }
+    });
+
+    pendingVenda.id = `${prefix}${maxId + 1}`;
+
     setActiveOSVenda(pendingVenda);
   };
 
@@ -822,7 +847,7 @@ export default function AdminPage() {
     
     // Filter by Evento
     if (selectedEventoId !== 'todos') {
-      if (selectedEventoId === 'loja' && v.eventoId) return false;
+      if (selectedEventoId === 'loja' && v.eventoId && v.eventoId !== 'loja') return false;
       if (selectedEventoId !== 'loja' && v.eventoId !== selectedEventoId) return false;
     }
     
@@ -846,6 +871,30 @@ export default function AdminPage() {
 
   // Status updates in dashboard
   const handleUpdateStatus = async (vendaId: string, newStatus: any) => {
+    const venda = vendas.find(v => v.id === vendaId);
+    if (venda && venda.status === 'orcamento' && newStatus !== 'orcamento' && newStatus !== 'cancelado') {
+      // Conversion from Orcamento to Pedido
+      let maxId = 1000;
+      vendas.forEach(v => {
+        if (!v.id.startsWith('ORC-')) {
+          const numMatch = v.id.match(/\d+/);
+          if (numMatch) {
+            const num = parseInt(numMatch[0], 10);
+            if (!isNaN(num) && num > maxId) maxId = num;
+          }
+        }
+      });
+      const nextId = `${maxId + 1}`;
+      
+      const convertedVenda = { ...venda, id: nextId, status: newStatus };
+      await deleteItem('vendas', vendaId);
+      await saveItem('vendas', convertedVenda);
+      
+      toast({ title: 'Orçamento Convertido em Pedido', description: `Novo Pedido #${nextId} gerado com sucesso.` });
+      loadData();
+      return;
+    }
+
     await updateItemStatus('vendas', vendaId, newStatus);
     toast({ title: 'Status Atualizado', description: `Pedido #${vendaId} alterado com sucesso.` });
     loadData();
@@ -1299,7 +1348,7 @@ export default function AdminPage() {
                     className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-white focus:outline-none focus:border-primary"
                   >
                     <option value="orcamento">Orçamento (7 dias)</option>
-                    <option value="recebido">Pedido Recebido</option>
+                    <option value="recebido">Novo Pedido</option>
                     <option value="laboratorio">No Laboratório</option>
                     <option value="montagem">Em Montagem</option>
                     <option value="pronto">Pronto p/ Entrega</option>
@@ -1315,7 +1364,7 @@ export default function AdminPage() {
               <div className="flex gap-4 overflow-x-auto pb-4 snap-x">
                 {[
                   { id: 'orcamento', label: 'Orçamento', color: 'border-slate-500 text-slate-400' },
-                  { id: 'recebido', label: 'Recebido', color: 'border-blue-500 text-blue-400' },
+                  { id: 'recebido', label: 'Novo Pedido', color: 'border-blue-500 text-blue-400' },
                   { id: 'laboratorio', label: 'Laboratório', color: 'border-amber-500 text-amber-400' },
                   { id: 'montagem', label: 'Montagem', color: 'border-purple-500 text-purple-400' },
                   { id: 'pronto', label: 'Pronto', color: 'border-green-500 text-green-400' },
@@ -1326,7 +1375,7 @@ export default function AdminPage() {
                     if (v.status !== col.id) return false;
                     if (selectedVendedorId !== 'todos' && v.vendedorId !== selectedVendedorId) return false;
                     if (selectedEventoId !== 'todos') {
-                      if (selectedEventoId === 'loja' && v.eventoId) return false;
+                      if (selectedEventoId === 'loja' && v.eventoId && v.eventoId !== 'loja') return false;
                       if (selectedEventoId !== 'loja' && v.eventoId !== selectedEventoId) return false;
                     }
                     return true;
@@ -1368,11 +1417,18 @@ export default function AdminPage() {
                             <div className="text-[10px] text-slate-400 uppercase">Valor: <span className="font-bold text-slate-300">R$ {v.valorTotal.toFixed(2)}</span></div>
                             <div className="text-[10px] text-slate-500 mt-1">{new Date(v.dataVenda).toLocaleDateString('pt-BR')}</div>
                             
-                            {v.eventoId && (
-                              <span className="absolute bottom-2 right-2 text-[8px] uppercase tracking-wider bg-primary/10 text-primary border border-primary/30 px-1.5 py-0.5 rounded font-bold">
-                                Ev: {eventos.find(ev => ev.id === v.eventoId)?.nome || 'Promocional'}
-                              </span>
-                            )}
+                            {v.eventoId && (() => {
+                              if (v.eventoId === 'loja') {
+                                return <span className="absolute bottom-2 right-2 text-[8px] uppercase tracking-wider bg-slate-800 text-slate-300 border border-slate-700 px-1.5 py-0.5 rounded font-bold shadow">LOJA</span>;
+                              }
+                              const ev = eventos.find(e => e.id === v.eventoId);
+                              const colorClass = ev?.cor || 'bg-primary';
+                              return (
+                                <span className={`absolute bottom-2 right-2 text-[8px] uppercase tracking-wider ${colorClass} text-white px-1.5 py-0.5 rounded font-bold shadow`}>
+                                  {ev?.nome || 'Promocional'}
+                                </span>
+                              );
+                            })()}
                           </div>
                         ))}
                         {colOrders.length === 0 && (
@@ -1431,8 +1487,10 @@ export default function AdminPage() {
                         value={pdvEventoId}
                         onChange={(e) => setPdvEventoId(e.target.value)}
                         className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-sm text-white focus:outline-none"
+                        required
                       >
                         <option value="">Nenhum evento...</option>
+                        <option value="loja">Loja</option>
                         {eventos.filter(ev => ev.status === 'ativo').map(ev => (
                           <option key={ev.id} value={ev.id}>{ev.nome}</option>
                         ))}
@@ -1630,7 +1688,21 @@ export default function AdminPage() {
                   <Card key={c.id} className="bg-slate-900 border-slate-800 shadow-md">
                     <CardHeader className="pb-3 flex flex-row justify-between items-start">
                       <div>
-                        <CardTitle className="text-lg font-bold">{c.nome}</CardTitle>
+                        <div className="flex items-center gap-2">
+                          <CardTitle className="text-lg font-bold">{c.nome}</CardTitle>
+                          {c.eventoId && (() => {
+                              if (c.eventoId === 'loja') {
+                                return <span className="text-[9px] uppercase tracking-wider bg-slate-800 text-slate-300 border border-slate-700 px-1.5 py-0.5 rounded-full font-bold shadow">LOJA</span>;
+                              }
+                              const ev = eventos.find(e => e.id === c.eventoId);
+                              const colorClass = ev?.cor || 'bg-primary';
+                              return (
+                                <span className={`text-[9px] uppercase tracking-wider ${colorClass} text-white px-1.5 py-0.5 rounded-full font-bold shadow`}>
+                                  {ev?.nome || 'Promocional'}
+                                </span>
+                              );
+                          })()}
+                        </div>
                         <CardDescription className="text-xs text-slate-450 mt-1">CPF: {c.cpf}</CardDescription>
                       </div>
                       <div className="flex gap-1.5">
