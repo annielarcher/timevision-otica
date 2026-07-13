@@ -3,7 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
   TrendingUp, Users, Package, ShoppingCart, Sparkles, LogOut, Lock, 
-  Search, Plus, Trash2, Edit3, CheckCircle, Clock, Eye, AlertTriangle, Calendar, FlaskConical, Ban
+  Search, Plus, Trash2, Edit3, CheckCircle, Clock, Eye, AlertTriangle, Calendar, FlaskConical, Ban,
+  DollarSign, Percent, Heart, ShieldAlert
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -31,17 +32,37 @@ export default function AdminPage() {
   const [isFirebaseMode, setIsFirebaseMode] = useState(false);
   
   // Navigation Tabs
-  const [activeTab, setActiveTab] = useState<'dash' | 'pdv' | 'clientes' | 'estoque' | 'eventos' | 'mkt' | 'laboratorios'>('dash');
+  const [activeTab, setActiveTab] = useState<'dash' | 'pdv' | 'clientes' | 'estoque' | 'eventos' | 'mkt' | 'laboratorios' | 'financeiro'>('dash');
   const [marketingMode, setMarketingMode] = useState<'flyer' | 'banner'>('flyer');
 
   // Database states
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [vendas, setVendas] = useState<Venda[]>([]);
+  const [despesas, setDespesas] = useState<any[]>([]); // Operational Expenses
   const [eventos, setEventos] = useState<Evento[]>([]);
   const [leads, setLeads] = useState<any[]>([]);
   const [equipe, setEquipe] = useState<MembroEquipe[]>([]);
   const [laboratorios, setLaboratorios] = useState<Laboratorio[]>([]);
+
+  // Expense Logger Form States
+  const [despesaCategoria, setDespesaCategoria] = useState<'gasolina' | 'coffee_break' | 'cartao_visita' | 'bolsa_personalizada' | 'material_expositivo' | 'software' | 'imposto' | 'outros'>('outros');
+  const [despesaDescricao, setDespesaDescricao] = useState('');
+  const [despesaValor, setDespesaValor] = useState(0);
+  const [despesaData, setDespesaData] = useState(new Date().toISOString().split('T')[0]);
+  const [despesaEventoId, setDespesaEventoId] = useState('');
+
+  // Tax and Invoice States
+  const [taxSimplesNacionalBracket, setTaxSimplesNacionalBracket] = useState<'bracket1' | 'bracket2' | 'bracket3'>('bracket1');
+  const [nfeInvoiceModalVenda, setNfeInvoiceModalVenda] = useState<Venda | null>(null);
+  const [isEmittingNfe, setIsEmittingNfe] = useState(false);
+
+  // Inline Sale Errors Editor States
+  const [editingSaleErrorsId, setEditingSaleErrorsId] = useState<string | null>(null);
+  const [saleErrorLente, setSaleErrorLente] = useState(0);
+  const [saleErrorDevolucao, setSaleErrorDevolucao] = useState(0);
+  const [saleErrorDesconto, setSaleErrorDesconto] = useState(0);
+  const [saleTaxaCartao, setSaleTaxaCartao] = useState(0);
 
   // Multi-user Auth states
   const [currentUser, setCurrentUser] = useState<{ email: string; nome: string } | null>(null);
@@ -83,6 +104,7 @@ export default function AdminPage() {
   const [pdvClienteId, setPdvClienteId] = useState('');
   const [pdvVendedorId, setPdvVendedorId] = useState('');
   const [pdvEventoId, setPdvEventoId] = useState('');
+  const [pdvIsDoacao, setPdvIsDoacao] = useState(false);
   const [pdvLaboratorioId, setPdvLaboratorioId] = useState('');
   const [pdvFrameId, setPdvFrameId] = useState('');
   const [pdvLensId, setPdvLensId] = useState('');
@@ -209,14 +231,15 @@ export default function AdminPage() {
   // 2. Fetch Data from Storage/Firebase
   const loadData = async () => {
     try {
-      const [cList, pList, vList, eList, lList, eqList, labList] = await Promise.all([
+      const [cList, pList, vList, eList, lList, eqList, labList, dList] = await Promise.all([
         getItems<Cliente>('clientes'),
         getItems<Produto>('produtos'),
         getItems<Venda>('vendas'),
         getItems<Evento>('eventos'),
         getItems<any>('inscricoes'),
         getItems<MembroEquipe>('equipe'),
-        getItems<Laboratorio>('laboratorios')
+        getItems<Laboratorio>('laboratorios'),
+        getItems<any>('despesas')
       ]);
       setClientes(cList);
       setProdutos(pList);
@@ -225,6 +248,7 @@ export default function AdminPage() {
       setLeads(lList);
       setEquipe(eqList);
       setLaboratorios(labList);
+      setDespesas(dList);
     } catch (error) {
       console.error('Error loading DB:', error);
     }
@@ -750,6 +774,88 @@ export default function AdminPage() {
     }
   };
 
+  // Financial Handlers
+  const handleAddDespesa = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (despesaValor <= 0 || !despesaDescricao) {
+      toast({
+        variant: 'destructive',
+        title: 'Dados Inválidos',
+        description: 'Preencha a descrição e um valor maior que zero.',
+      });
+      return;
+    }
+    const newDespesa = {
+      id: `desp-${Math.floor(1000 + Math.random() * 9000)}`,
+      categoria: despesaCategoria,
+      descricao: despesaDescricao,
+      valor: Number(despesaValor),
+      data: despesaData,
+      eventoId: despesaEventoId !== '' ? despesaEventoId : undefined,
+      criadoPor: currentUser?.email || 'admin@timevision.com.br'
+    };
+    await saveItem('despesas', newDespesa);
+    toast({
+      title: 'Despesa Registrada',
+      description: 'Custo operacional adicionado com sucesso.',
+    });
+    setDespesaDescricao('');
+    setDespesaValor(0);
+    loadData();
+  };
+
+  const handleDeleteDespesa = async (id: string) => {
+    if (confirm('Tem certeza que deseja excluir esta despesa?')) {
+      await deleteItem('despesas', id);
+      toast({
+        title: 'Despesa Excluída',
+        description: 'Registro de despesa removido com sucesso.',
+      });
+      loadData();
+    }
+  };
+
+  const handleSaveSaleErrors = async (venda: Venda) => {
+    const updated: Venda = {
+      ...venda,
+      custoErroRefazerLente: Number(saleErrorLente),
+      custoErroDevolucao: Number(saleErrorDevolucao),
+      custoErroDesconto: Number(saleErrorDesconto),
+      taxaCartaoJuros: Number(saleTaxaCartao)
+    };
+    await saveItem('vendas', updated);
+    toast({
+      title: 'Auditoria Atualizada',
+      description: 'Custos com erros salvos com sucesso.',
+    });
+    setEditingSaleErrorsId(null);
+    loadData();
+  };
+
+  const handleSimulateNfeEmit = async (venda: Venda) => {
+    setIsEmittingNfe(true);
+    toast({
+      title: 'Transmitindo para SEFAZ...',
+      description: 'Emitindo nota fiscal de consumidor (NFC-e)...',
+    });
+    
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    
+    const updated: Venda = {
+      ...venda,
+      nfeStatus: 'emitida',
+      nfeChave: `3326${Math.floor(1000000000000000 + Math.random() * 9000000000000000)}`
+    };
+    
+    await saveItem('vendas', updated);
+    toast({
+      title: 'Nota Fiscal Emitida!',
+      description: `NFC-e autorizada pelo uso da SEFAZ para o pedido ${venda.id}.`,
+    });
+    setIsEmittingNfe(false);
+    loadData();
+  };
+
   // 7. POS Sale & OS/Budget Generation Trigger
   const handlePdvSale = async (e: React.FormEvent, type: 'venda' | 'orcamento') => {
     e.preventDefault();
@@ -801,7 +907,7 @@ export default function AdminPage() {
       clienteEndereco: client.endereco,
       clienteTelefone: client.telefone,
       produtos: saleProducts,
-      valorTotal: pdvPriceTotal,
+      valorTotal: pdvIsDoacao ? 0 : pdvPriceTotal,
       receita: {
         dataReceita: orderDate,
         longeEsfericoOD: pdvLongeEsfOD,
@@ -827,7 +933,8 @@ export default function AdminPage() {
         adicao: pdvAdicao,
         codigoLente: pdvCodigoLente,
       },
-      status: type === 'venda' ? 'recebido' : 'orcamento',
+      status: pdvIsDoacao ? 'doacao' : (type === 'venda' ? 'recebido' : 'orcamento'),
+      isDoacao: pdvIsDoacao || undefined,
       dataVenda: orderDate,
       validadeOrcamento: type === 'orcamento' ? new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0] : undefined,
       vendedorId: pdvVendedorId,
@@ -1252,7 +1359,8 @@ export default function AdminPage() {
             { id: 'estoque', Icon: Package, label: "Estoque" },
             { id: 'eventos', Icon: Calendar, label: "Eventos" },
             { id: 'mkt', Icon: Sparkles, label: "Marketing" },
-            { id: 'laboratorios', Icon: FlaskConical, label: "Laboratórios" }
+            { id: 'laboratorios', Icon: FlaskConical, label: "Laboratórios" },
+            { id: 'financeiro', Icon: DollarSign, label: "Financeiro" }
           ].map(({ id, Icon, label }) => (
             <button 
               key={id} 
@@ -1636,6 +1744,21 @@ export default function AdminPage() {
                         ))}
                       </select>
                     </div>
+
+                    <div className="flex flex-col gap-1.5 justify-end">
+                      <div className="flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm h-[46px]">
+                        <input
+                          type="checkbox"
+                          id="pdv-is-doacao"
+                          checked={pdvIsDoacao}
+                          onChange={(e) => setPdvIsDoacao(e.target.checked)}
+                          className="w-4 h-4 rounded border-slate-800 bg-slate-950 text-primary focus:ring-primary cursor-pointer"
+                        />
+                        <label htmlFor="pdv-is-doacao" className="text-xs font-bold text-slate-350 cursor-pointer select-none">
+                          Registrar como Doação / Cortesia
+                        </label>
+                      </div>
+                    </div>
                   </div>
 
                   {/* Eyeglass Prescription (Receita) */}
@@ -1719,24 +1842,26 @@ export default function AdminPage() {
                   <div className="border-t border-slate-800 pt-6 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
                     <div>
                       <span className="text-xs text-slate-450 block uppercase font-bold">Valor Total a Pagar</span>
-                      <span className="text-3xl font-black text-primary">R$ {pdvPriceTotal.toFixed(2)}</span>
+                      <span className="text-3xl font-black text-primary">R$ {pdvIsDoacao ? '0.00' : pdvPriceTotal.toFixed(2)}</span>
                     </div>
                     
                     <div className="flex flex-col sm:flex-row gap-3">
-                      <Button 
-                        type="submit" 
-                        onClick={() => setPdvSaleType('orcamento')}
-                        variant="outline"
-                        className="border-slate-800 text-slate-350 hover:bg-slate-850 hover:text-white font-bold px-6 py-6 text-xs uppercase tracking-wider rounded-xl"
-                      >
-                        Gerar Orçamento (7 dias)
-                      </Button>
+                      {!pdvIsDoacao && (
+                        <Button 
+                          type="submit" 
+                          onClick={() => setPdvSaleType('orcamento')}
+                          variant="outline"
+                          className="border-slate-800 text-slate-350 hover:bg-slate-850 hover:text-white font-bold px-6 py-6 text-xs uppercase tracking-wider rounded-xl"
+                        >
+                          Gerar Orçamento (7 dias)
+                        </Button>
+                      )}
                       <Button 
                         type="submit" 
                         onClick={() => setPdvSaleType('venda')}
                         className="bg-primary text-primary-foreground hover:bg-primary/90 font-bold px-8 py-6 text-xs uppercase tracking-wider rounded-xl"
                       >
-                        Registrar Venda & Abrir O.S.
+                        {pdvIsDoacao ? 'Registrar Doação & Abrir O.S.' : 'Registrar Venda & Abrir O.S.'}
                       </Button>
                     </div>
                   </div>
@@ -2463,6 +2588,589 @@ export default function AdminPage() {
         {/* TABA 7: LABORATÓRIOS */}
         {activeTab === 'laboratorios' && (
           <LaboratoriosManager />
+        )}
+
+        {/* TABA 8: GESTÃO FINANCEIRA */}
+        {activeTab === 'financeiro' && (() => {
+          const nonCanceledSales = vendas.filter(v => v.status !== 'cancelado' && v.status !== 'orcamento');
+          const faturamentoBruto = nonCanceledSales.reduce((acc, v) => acc + (v.isDoacao ? 0 : (v.valorTotal || 0)), 0);
+          const custoProdutos = nonCanceledSales.reduce((acc, v) => acc + (v.custoTotal || 0), 0);
+          const custoErros = nonCanceledSales.reduce((acc, v) => acc + (v.custoErroRefazerLente || 0) + (v.custoErroDevolucao || 0) + (v.custoErroDesconto || 0), 0);
+          const taxasCartao = nonCanceledSales.reduce((acc, v) => acc + (v.taxaCartaoJuros || 0), 0);
+          const totalDespesasOperacionais = despesas.reduce((acc, d) => acc + (d.valor || 0), 0);
+          const taxRate = taxSimplesNacionalBracket === 'bracket1' ? 0.04 : taxSimplesNacionalBracket === 'bracket2' ? 0.073 : 0.095;
+          const impostosEstimados = faturamentoBruto * taxRate;
+          const custosTotais = custoProdutos + totalDespesasOperacionais + custoErros + taxasCartao + impostosEstimados;
+          const lucroLiquido = faturamentoBruto - custosTotais;
+
+          return (
+            <div className="space-y-8 animate-in fade-in duration-300">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-2xl font-headline font-bold">Gestão Financeira Integrada</h2>
+                  <p className="text-sm text-slate-450">Demonstração de resultados, auditoria tributária, custos operacionais e controle de doações.</p>
+                </div>
+              </div>
+
+              {/* Metrics cards */}
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                <Card className="bg-slate-900 border-slate-800 shadow">
+                  <CardContent className="pt-6">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <span className="text-[10px] font-bold uppercase text-slate-400">Faturamento Bruto</span>
+                        <h3 className="text-2xl font-black text-brand-gold mt-1">R$ {faturamentoBruto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
+                      </div>
+                      <div className="bg-amber-500/10 p-2 rounded-lg text-amber-500"><TrendingUp size={16} /></div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-slate-900 border-slate-800 shadow">
+                  <CardContent className="pt-6">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <span className="text-[10px] font-bold uppercase text-slate-400">Custos Operacionais</span>
+                        <h3 className="text-2xl font-black text-slate-200 mt-1">R$ {totalDespesasOperacionais.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
+                      </div>
+                      <div className="bg-slate-850 p-2 rounded-lg text-slate-400"><DollarSign size={16} /></div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-slate-900 border-slate-800 shadow">
+                  <CardContent className="pt-6">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <span className="text-[10px] font-bold uppercase text-slate-400">Custos com Erros</span>
+                        <h3 className="text-2xl font-black text-red-400 mt-1">R$ {custoErros.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
+                      </div>
+                      <div className="bg-red-500/10 p-2 rounded-lg text-red-400"><ShieldAlert size={16} /></div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-slate-900 border-slate-800 shadow">
+                  <CardContent className="pt-6">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <span className="text-[10px] font-bold uppercase text-slate-400">Impostos Simples ({ (taxRate * 100).toFixed(1) }%)</span>
+                        <h3 className="text-2xl font-black text-slate-200 mt-1">R$ {impostosEstimados.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
+                      </div>
+                      <div className="bg-blue-500/10 p-2 rounded-lg text-blue-400"><Percent size={16} /></div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-slate-900 border-slate-800 shadow">
+                  <CardContent className="pt-6">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <span className="text-[10px] font-bold uppercase text-slate-400">Resultado Líquido</span>
+                        <h3 className={`text-2xl font-black mt-1 ${lucroLiquido >= 0 ? 'text-emerald-400' : 'text-red-500'}`}>
+                          R$ {lucroLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </h3>
+                      </div>
+                      <div className={`p-2 rounded-lg ${lucroLiquido >= 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-500'}`}><CheckCircle size={16} /></div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                {/* Box 1: Simples Nacional Bracket Simulator */}
+                <Card className="bg-slate-900 border-slate-800 lg:col-span-1 shadow">
+                  <CardHeader>
+                    <CardTitle className="text-lg font-bold text-slate-200 flex items-center gap-2">
+                      <Percent className="text-brand-gold h-5 w-5" /> Simulador de Impostos (Anexo I)
+                    </CardTitle>
+                    <CardDescription>Configure a faixa de enquadramento do Simples Nacional comercial.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-bold text-slate-400">Faturamento Anual (Últimos 12 meses)</label>
+                      <select
+                        value={taxSimplesNacionalBracket}
+                        onChange={(e) => setTaxSimplesNacionalBracket(e.target.value as any)}
+                        className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-sm text-white focus:outline-none"
+                      >
+                        <option value="bracket1">Até R$ 180.000,00 (Alíquota Efetiva: 4.0%)</option>
+                        <option value="bracket2">R$ 180.000,01 a R$ 360.000,00 (Alíquota Efetiva: 7.3%)</option>
+                        <option value="bracket3">R$ 360.000,01 a R$ 720.000,00 (Alíquota Efetiva: 9.5%)</option>
+                      </select>
+                    </div>
+                    <div className="bg-slate-950 border border-slate-850 rounded-xl p-4 space-y-2">
+                      <div className="flex justify-between text-xs text-slate-400">
+                        <span>Alíquota Selecionada:</span>
+                        <span className="font-bold text-white">{(taxRate * 100).toFixed(1)}%</span>
+                      </div>
+                      <div className="flex justify-between text-xs text-slate-400">
+                        <span>Faturamento Mensal Calculado:</span>
+                        <span className="font-bold text-white">R$ {faturamentoBruto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      </div>
+                      <div className="border-t border-slate-800 pt-2 flex justify-between text-sm">
+                        <span className="font-bold text-slate-300">Imposto devido estimado:</span>
+                        <span className="font-bold text-brand-gold">R$ {impostosEstimados.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      </div>
+                    </div>
+                    <div className="text-[10px] text-slate-500 italic">
+                      *Estimativa com base na Lei Complementar 123/2006. O cálculo real de recolhimento via DAS dependerá das deduções e receita bruta acumulada.
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Box 2: Expenses Logger Form & List */}
+                <Card className="bg-slate-900 border-slate-800 lg:col-span-2 shadow">
+                  <CardHeader>
+                    <CardTitle className="text-lg font-bold text-slate-200 flex items-center gap-2">
+                      <DollarSign className="text-brand-gold h-5 w-5" /> Registro de Custos Operacionais
+                    </CardTitle>
+                    <CardDescription>Cadastre as despesas com gasolina, coffee breaks, materiais de exposição, etc.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <form onSubmit={handleAddDespesa} className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-950 p-4 rounded-xl border border-slate-850">
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Categoria</label>
+                        <select
+                          value={despesaCategoria}
+                          onChange={(e) => setDespesaCategoria(e.target.value as any)}
+                          className="bg-slate-900 border border-slate-800 rounded-lg p-2 text-sm text-white"
+                        >
+                          <option value="gasolina">Gasolina / Combustível</option>
+                          <option value="coffee_break">Coffee Break / Alimentação</option>
+                          <option value="cartao_visita">Cartões de Visita</option>
+                          <option value="bolsa_personalizada">Bolsas Personalizadas</option>
+                          <option value="material_expositivo">Material Expositivo</option>
+                          <option value="software">Software / Sistemas</option>
+                          <option value="imposto">Impostos / Taxas</option>
+                          <option value="outros">Outros Custos</option>
+                        </select>
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Valor (R$)</label>
+                        <input
+                          type="number"
+                          step="any"
+                          value={despesaValor || ''}
+                          onChange={(e) => setDespesaValor(Number(e.target.value))}
+                          placeholder="0.00"
+                          className="bg-slate-900 border border-slate-800 rounded-lg p-2 text-sm text-white focus:outline-none"
+                          required
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1.5 md:col-span-2">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Descrição</label>
+                        <input
+                          type="text"
+                          value={despesaDescricao}
+                          onChange={(e) => setDespesaDescricao(e.target.value)}
+                          placeholder="Ex: Combustível para ação em Nilópolis"
+                          className="bg-slate-900 border border-slate-800 rounded-lg p-2 text-sm text-white focus:outline-none"
+                          required
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Data do Gasto</label>
+                        <input
+                          type="date"
+                          value={despesaData}
+                          onChange={(e) => setDespesaData(e.target.value)}
+                          className="bg-slate-900 border border-slate-800 rounded-lg p-2 text-sm text-white"
+                          required
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Vincular a Evento</label>
+                        <select
+                          value={despesaEventoId}
+                          onChange={(e) => setDespesaEventoId(e.target.value)}
+                          className="bg-slate-900 border border-slate-800 rounded-lg p-2 text-sm text-white focus:outline-none"
+                        >
+                          <option value="">Nenhum...</option>
+                          {eventos.map(ev => (
+                            <option key={ev.id} value={ev.id}>{ev.nome}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="md:col-span-2 flex justify-end">
+                        <Button type="submit" className="bg-primary text-primary-foreground font-bold px-6 text-xs uppercase tracking-wider">
+                          Adicionar Despesa
+                        </Button>
+                      </div>
+                    </form>
+
+                    {/* List of despesas */}
+                    <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                      {despesas.length === 0 ? (
+                        <p className="text-xs text-slate-500 italic text-center py-4">Nenhum custo operacional registrado.</p>
+                      ) : (
+                        despesas.slice().reverse().map(d => {
+                          const evt = eventos.find(e => e.id === d.eventoId);
+                          return (
+                            <div key={d.id} className="flex justify-between items-center bg-slate-950/60 p-3 rounded-lg border border-slate-850">
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-slate-850 text-slate-350">{d.categoria.replace('_', ' ')}</span>
+                                  <span className="text-xs text-slate-450 font-bold">{d.data.split('-').reverse().join('/')}</span>
+                                </div>
+                                <p className="text-xs text-white font-medium mt-1">{d.descricao}</p>
+                                {evt && <p className="text-[9px] text-brand-gold font-bold uppercase mt-0.5">Origem: {evt.nome}</p>}
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <span className="text-sm font-black text-slate-200">R$ {d.valor.toFixed(2)}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteDespesa(d.id)}
+                                  className="text-red-500 hover:text-red-400 p-1"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Row 2: Transaction Audits, Error Costs and NFC-e Generation */}
+              <div className="grid grid-cols-1 gap-6">
+                <Card className="bg-slate-900 border-slate-800 shadow">
+                  <CardHeader>
+                    <CardTitle className="text-lg font-bold text-slate-200 flex items-center gap-2">
+                      <ShieldAlert className="text-brand-gold h-5 w-5" /> Auditoria de Pedidos, Custos com Erros & Emissão de Notas
+                    </CardTitle>
+                    <CardDescription>Gerencie custos extras de transações, refações de lentes, devoluções, e emita notas fiscais (NFC-e).</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="border-b border-slate-800 text-slate-400 uppercase tracking-widest text-[9px] font-bold">
+                            <th className="py-3 px-2">Pedido ID</th>
+                            <th className="py-3 px-2">Cliente / Data</th>
+                            <th className="py-3 px-2">Total Pedido</th>
+                            <th className="py-3 px-2">Juros/Taxa Transação</th>
+                            <th className="py-3 px-2">Custos de Erros</th>
+                            <th className="py-3 px-2 text-center">Nota Fiscal NFC-e</th>
+                            <th className="py-3 px-2 text-right">Ações</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {vendas.length === 0 ? (
+                            <tr>
+                              <td colSpan={7} className="py-6 text-center text-slate-500 italic">Nenhum pedido finalizado no sistema.</td>
+                            </tr>
+                          ) : (
+                            vendas.slice().reverse().map(v => {
+                              const errRefaz = v.custoErroRefazerLente || 0;
+                              const errDevol = v.custoErroDevolucao || 0;
+                              const errDesc = v.custoErroDesconto || 0;
+                              const totalErros = errRefaz + errDevol + errDesc;
+                              const taxJuros = v.taxaCartaoJuros || 0;
+                              
+                              const isEditing = editingSaleErrorsId === v.id;
+
+                              return (
+                                <tr key={v.id} className="border-b border-slate-850 hover:bg-slate-950/40">
+                                  <td className="py-4 px-2 font-mono font-bold text-slate-350">
+                                    {v.id}
+                                    {v.isDoacao && <span className="ml-2 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[9px] px-1 py-0.5 rounded font-tagline uppercase font-bold">Doação</span>}
+                                    {v.status === 'cancelado' && <span className="ml-2 bg-red-500/10 text-red-500 border border-red-500/30 text-[9px] px-1 py-0.5 rounded font-tagline uppercase font-bold">Cancelado</span>}
+                                    {v.status === 'estornado' && <span className="ml-2 bg-amber-500/10 text-amber-500 border border-amber-500/30 text-[9px] px-1 py-0.5 rounded font-tagline uppercase font-bold">Estornado</span>}
+                                  </td>
+                                  <td className="py-4 px-2">
+                                    <div className="font-bold text-white">{v.clienteNome}</div>
+                                    <div className="text-[10px] text-slate-500">{v.dataVenda.split('-').reverse().join('/')}</div>
+                                  </td>
+                                  <td className="py-4 px-2 font-bold text-slate-200">
+                                    R$ {(v.valorTotal || 0).toFixed(2)}
+                                  </td>
+                                  <td className="py-4 px-2">
+                                    {isEditing ? (
+                                      <div className="flex flex-col gap-1 w-20">
+                                        <span className="text-[8px] text-slate-500 uppercase font-bold">Juros/Taxas</span>
+                                        <input 
+                                          type="number" 
+                                          value={saleTaxaCartao} 
+                                          onChange={(e) => setSaleTaxaCartao(Number(e.target.value))} 
+                                          className="bg-slate-950 border border-slate-800 rounded p-1 text-[11px] text-white" 
+                                        />
+                                      </div>
+                                    ) : (
+                                      <span className="text-slate-300 font-medium">R$ {taxJuros.toFixed(2)}</span>
+                                    )}
+                                  </td>
+                                  <td className="py-4 px-2">
+                                    {isEditing ? (
+                                      <div className="flex gap-2">
+                                        <div className="flex flex-col gap-1 w-16">
+                                          <span className="text-[8px] text-slate-500 uppercase font-bold">Lente</span>
+                                          <input 
+                                            type="number" 
+                                            value={saleErrorLente} 
+                                            onChange={(e) => setSaleErrorLente(Number(e.target.value))} 
+                                            className="bg-slate-950 border border-slate-800 rounded p-1 text-[11px] text-white" 
+                                          />
+                                        </div>
+                                        <div className="flex flex-col gap-1 w-16">
+                                          <span className="text-[8px] text-slate-500 uppercase font-bold">Devolução</span>
+                                          <input 
+                                            type="number" 
+                                            value={saleErrorDevolucao} 
+                                            onChange={(e) => setSaleErrorDevolucao(Number(e.target.value))} 
+                                            className="bg-slate-950 border border-slate-800 rounded p-1 text-[11px] text-white" 
+                                          />
+                                        </div>
+                                        <div className="flex flex-col gap-1 w-16">
+                                          <span className="text-[8px] text-slate-500 uppercase font-bold">Descontos</span>
+                                          <input 
+                                            type="number" 
+                                            value={saleErrorDesconto} 
+                                            onChange={(e) => setSaleErrorDesconto(Number(e.target.value))} 
+                                            className="bg-slate-950 border border-slate-800 rounded p-1 text-[11px] text-white" 
+                                          />
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div>
+                                        <div className="text-slate-350 font-bold">R$ {totalErros.toFixed(2)}</div>
+                                        {totalErros > 0 && (
+                                          <div className="text-[9px] text-slate-500">
+                                            ({errRefaz > 0 && `Refazer: R$ ${errRefaz} `}
+                                            {errDevol > 0 && `Devol: R$ ${errDevol} `}
+                                            {errDesc > 0 && `Desconto: R$ ${errDesc}`})
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </td>
+                                  <td className="py-4 px-2 text-center">
+                                    {v.nfeStatus === 'emitida' ? (
+                                      <div className="flex flex-col items-center gap-1">
+                                        <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[10px] px-2 py-0.5 rounded font-tagline uppercase font-bold flex items-center gap-1">
+                                          <CheckCircle size={10} /> NFC-e Autorizada
+                                        </span>
+                                        <button 
+                                          type="button"
+                                          onClick={() => setNfeInvoiceModalVenda(v)}
+                                          className="text-[9px] font-bold text-brand-gold hover:underline"
+                                        >
+                                          Ver DANFE NFC-e
+                                        </button>
+                                      </div>
+                                    ) : v.status === 'cancelado' || v.status === 'estornado' || v.isDoacao ? (
+                                      <span className="text-slate-500 italic text-[10px]">Isento de NFC-e</span>
+                                    ) : (
+                                      <Button
+                                        type="button"
+                                        onClick={() => handleSimulateNfeEmit(v)}
+                                        disabled={isEmittingNfe}
+                                        variant="outline"
+                                        className="border-blue-900/50 hover:bg-blue-950 hover:text-blue-400 text-blue-400 text-[10px] px-3 py-1.5 h-auto uppercase tracking-wider font-bold"
+                                      >
+                                        Emitir Nota Fiscal
+                                      </Button>
+                                    )}
+                                  </td>
+                                  <td className="py-4 px-2 text-right">
+                                    {isEditing ? (
+                                      <div className="flex gap-2 justify-end">
+                                        <Button 
+                                          type="button"
+                                          onClick={() => handleSaveSaleErrors(v)} 
+                                          className="bg-green-700 hover:bg-green-600 text-xs px-2.5 py-1.5 h-auto font-bold"
+                                        >
+                                          Salvar
+                                        </Button>
+                                        <Button 
+                                          type="button"
+                                          onClick={() => setEditingSaleErrorsId(null)} 
+                                          variant="outline" 
+                                          className="border-slate-800 text-slate-400 text-xs px-2.5 py-1.5 h-auto"
+                                        >
+                                          Voltar
+                                        </Button>
+                                      </div>
+                                    ) : (
+                                      <Button
+                                        type="button"
+                                        onClick={() => {
+                                          setEditingSaleErrorsId(v.id);
+                                          setSaleErrorLente(v.custoErroRefazerLente || 0);
+                                          setSaleErrorDevolucao(v.custoErroDevolucao || 0);
+                                          setSaleErrorDesconto(v.custoErroDesconto || 0);
+                                          setSaleTaxaCartao(v.taxaCartaoJuros || 0);
+                                        }}
+                                        variant="outline"
+                                        className="border-slate-800 text-slate-400 text-xs font-bold px-3 py-1.5 h-auto hover:bg-slate-850 hover:text-white"
+                                      >
+                                        <Edit3 size={11} className="mr-1" /> Auditar
+                                      </Button>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Row 3: Eyewear Donations trace panel */}
+              <div className="grid grid-cols-1 gap-6">
+                <Card className="bg-slate-900 border-slate-800 shadow">
+                  <CardHeader>
+                    <CardTitle className="text-lg font-bold text-slate-200 flex items-center gap-2">
+                      <Heart className="text-brand-gold h-5 w-5" /> Controle de Doações de Óculos
+                    </CardTitle>
+                    <CardDescription>Relação de óculos cortesia ou doações de lentes/armações vinculadas a ações sociais ou campanhas.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="border-b border-slate-800 text-slate-400 uppercase tracking-widest text-[9px] font-bold">
+                            <th className="py-3 px-2">O.S. doação</th>
+                            <th className="py-3 px-2">Nome do Cliente</th>
+                            <th className="py-3 px-2">CPF do Beneficiário</th>
+                            <th className="py-3 px-2">Campanha / Evento de Origem</th>
+                            <th className="py-3 px-2">Armação / Modelo Lente</th>
+                            <th className="py-3 px-2">Valor Estimado original</th>
+                            <th className="py-3 px-2">Custo para a Óptica</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {vendas.filter(v => v.isDoacao).length === 0 ? (
+                            <tr>
+                              <td colSpan={7} className="py-6 text-center text-slate-500 italic">Nenhuma doação cadastrada no sistema.</td>
+                            </tr>
+                          ) : (
+                            vendas.filter(v => v.isDoacao).slice().reverse().map(v => {
+                              const evt = eventos.find(e => e.id === v.eventoId);
+                              const frame = v.produtos?.find(p => p.id === 'arm-id')?.nome || 'Armação Padrão';
+                              const lens = v.produtos?.find(p => p.id === 'lens-id' || p.id === 'lens')?.nome || 'Lente Corretiva';
+                              const custo = v.custoTotal || 0;
+                              const originalRetail = custo / 0.3;
+                              return (
+                                <tr key={v.id} className="border-b border-slate-850 hover:bg-slate-950/40">
+                                  <td className="py-4 px-2 font-mono font-bold text-brand-gold">{v.id}</td>
+                                  <td className="py-4 px-2 font-bold text-white">{v.clienteNome}</td>
+                                  <td className="py-4 px-2 font-mono text-slate-450">{v.clienteCpf || 'N/A'}</td>
+                                  <td className="py-4 px-2 font-bold text-slate-300">
+                                    {evt ? (
+                                      <span className="px-2 py-0.5 bg-slate-950 border border-slate-850 text-[10px] uppercase font-bold text-brand-gold rounded-full">
+                                        {evt.nome}
+                                      </span>
+                                    ) : (
+                                      <span className="text-slate-500 italic">Loja Física / Não Vinculado</span>
+                                    )}
+                                  </td>
+                                  <td className="py-4 px-2">
+                                    <div className="text-slate-200 font-medium">{frame}</div>
+                                    <div className="text-[10px] text-slate-500">{lens}</div>
+                                  </td>
+                                  <td className="py-4 px-2 text-slate-450 italic">R$ {originalRetail.toFixed(2)}</td>
+                                  <td className="py-4 px-2 font-bold text-slate-200">R$ {custo.toFixed(2)}</td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* DANFE NFC-e Modal Simulation */}
+        {nfeInvoiceModalVenda && (
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <Card className="w-full max-w-xl bg-white text-slate-950 shadow-2xl p-6 border border-slate-350 text-[11px] font-mono leading-tight space-y-4">
+              <div className="text-center border-b border-slate-400 pb-2">
+                <h3 className="font-bold text-sm uppercase">Timevision Óptica Ltda</h3>
+                <p>CNPJ: 12.345.678/0001-99 - IE: 87.654.321</p>
+                <p>Av. das Américas, 4200 - Barra da Tijuca, RJ</p>
+                <p className="font-bold border-t border-dashed border-slate-400 mt-2 pt-1 text-[12px]">
+                  DANFE NFC-e - Documento Auxiliar da Nota Fiscal de Consumidor Eletrônica
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <div className="flex justify-between font-bold border-b border-dashed border-slate-400 pb-1 text-slate-700">
+                  <span>ITEM / DESCRIÇÃO</span>
+                  <span>QTD x VL UNIT</span>
+                  <span>VL TOTAL</span>
+                </div>
+                {nfeInvoiceModalVenda.produtos?.map((prod, idx) => (
+                  <div key={idx} className="flex justify-between text-slate-800">
+                    <span>{String(idx + 1).padStart(3, '0')} {prod.nome.toUpperCase()}</span>
+                    <span>1 un x R$ {prod.precoVenda.toFixed(2)}</span>
+                    <span>R$ {prod.precoVenda.toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="border-t border-dashed border-slate-400 pt-2 space-y-1">
+                <div className="flex justify-between font-bold">
+                  <span>QTD. TOTAL DE ITENS</span>
+                  <span>{nfeInvoiceModalVenda.produtos?.length || 0}</span>
+                </div>
+                <div className="flex justify-between font-bold text-sm">
+                  <span>VALOR TOTAL R$</span>
+                  <span>R$ {(nfeInvoiceModalVenda.valorTotal || 0).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-slate-700">
+                  <span>FORMA DE PAGAMENTO</span>
+                  <span>{nfeInvoiceModalVenda.pagamento?.metodo?.toUpperCase() || 'CARTÃO'}</span>
+                </div>
+              </div>
+
+              <div className="border-t border-dashed border-slate-400 pt-2 text-center space-y-2">
+                <div>
+                  <p className="font-bold">ÁREA DO CONSUMIDOR</p>
+                  <p>Consumidor: {nfeInvoiceModalVenda.clienteNome.toUpperCase()}</p>
+                  <p>CPF: {nfeInvoiceModalVenda.clienteCpf}</p>
+                </div>
+
+                <div className="border-t border-dashed border-slate-400 pt-2 text-[10px] space-y-1 text-slate-700">
+                  <p className="font-bold">NFC-e nº {nfeInvoiceModalVenda.id} - Série 001</p>
+                  <p>Data de Emissão: {new Date(nfeInvoiceModalVenda.dataVenda).toLocaleDateString('pt-BR')} {new Date().toLocaleTimeString('pt-BR')}</p>
+                  <p>Protocolo de Autorização: 1332600049928374</p>
+                  <p className="font-bold mt-2">CHAVE DE ACESSO</p>
+                  <p className="tracking-widest font-sans font-bold select-all bg-slate-100 p-1 text-[9px] text-slate-800 border border-slate-200 rounded">
+                    {nfeInvoiceModalVenda.nfeChave || 'N/A'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="border-t border-dashed border-slate-400 pt-4 flex flex-col items-center">
+                <div className="w-5/6 h-8 bg-slate-900 flex items-center justify-center text-white text-[8px] tracking-[6px] font-sans font-bold">
+                  ||||| | |||| ||| || |||||| | |||| ||||
+                </div>
+                <span className="text-[8px] text-slate-500 mt-1">Consulta via leitor de QR Code ou portal da SEFAZ</span>
+              </div>
+
+              <div className="flex justify-end pt-4 border-t border-slate-300">
+                <Button 
+                  type="button"
+                  onClick={() => setNfeInvoiceModalVenda(null)} 
+                  className="bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs uppercase tracking-wider px-6"
+                >
+                  Fechar DANFE
+                </Button>
+              </div>
+            </Card>
+          </div>
         )}
 
       </main>

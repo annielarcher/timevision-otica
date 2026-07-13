@@ -126,7 +126,14 @@ export interface Venda {
   custoTotal: number;
   lucroTotal: number;
   receita?: ReceitaVisual;
-  status: 'recebido' | 'laboratorio' | 'montagem' | 'pronto' | 'entregue' | 'orcamento' | 'cancelado';
+  status: 'recebido' | 'laboratorio' | 'montagem' | 'pronto' | 'entregue' | 'orcamento' | 'cancelado' | 'estornado' | 'doacao';
+  isDoacao?: boolean;
+  custoErroRefazerLente?: number;
+  custoErroDevolucao?: number;
+  custoErroDesconto?: number;
+  taxaCartaoJuros?: number;
+  nfeStatus?: 'pendente' | 'emitida' | 'erro';
+  nfeChave?: string;
   dataVenda: string;
   dataEntrega?: string;
   pagamento?: {
@@ -141,6 +148,16 @@ export interface Venda {
   eventoId?: string; // Linked promotional event ID
   laboratorioId?: string;
   laboratorioNome?: string;
+}
+
+export interface Despesa {
+  id: string;
+  categoria: 'gasolina' | 'coffee_break' | 'cartao_visita' | 'bolsa_personalizada' | 'material_expositivo' | 'software' | 'imposto' | 'outros';
+  descricao: string;
+  valor: number;
+  data: string; // YYYY-MM-DD
+  eventoId?: string;
+  criadoPor: string;
 }
 
 export interface LenteLaboratorio {

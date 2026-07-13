@@ -66,7 +66,13 @@ export default function WorkOrderGenerator({ initialVenda, onClose, onSaveSucces
   const [codigoLente, setCodigoLente] = useState(initialVenda?.receita?.codigoLente || '');
 
   // Payment
-  const [paymentMethod, setPaymentMethod] = useState('Cartão de Crédito');
+  const [paymentMethod, setPaymentMethod] = useState(initialVenda?.isDoacao ? 'Doação' : 'Cartão de Crédito');
+  const setPointAndCheckDoacao = (val: string) => {
+    setPaymentMethod(val);
+    if (val === 'Doação') {
+      setPriceTotal(0);
+    }
+  };
   const [installments, setInstallments] = useState('1x');
   const [downPayment, setDownPayment] = useState('0.00');
   const [payOnDelivery, setPayOnDelivery] = useState(initialVenda?.pagamento?.pagamentoNaEntrega || false);
@@ -704,9 +710,9 @@ export default function WorkOrderGenerator({ initialVenda, onClose, onSaveSucces
           { id: 'arm-id', nome: frameModel, quantidade: 1, precoVenda: priceTotal * 0.4, precoCusto: priceTotal * 0.2 },
           { id: 'lens-id', nome: lensType, quantity: 1, precoVenda: priceTotal * 0.6, precoCusto: priceTotal * 0.3 } as any
         ],
-        valorTotal: priceTotal,
+        valorTotal: paymentMethod === 'Doação' ? 0 : priceTotal,
         custoTotal: priceTotal * 0.3,
-        lucroTotal: priceTotal * 0.7,
+        lucroTotal: paymentMethod === 'Doação' ? -(priceTotal * 0.3) : priceTotal * 0.7,
         receita: {
           longeEsfericoOD,
           longeEsfericoOE,
@@ -732,7 +738,8 @@ export default function WorkOrderGenerator({ initialVenda, onClose, onSaveSucces
           codigoLente,
           dataReceita
         } as any,
-        status: initialVenda?.status || 'recebido',
+        status: (paymentMethod === 'Doação' ? 'doacao' : (initialVenda?.status || 'recebido')) as any,
+        isDoacao: paymentMethod === 'Doação' ? true : (initialVenda?.isDoacao || undefined),
         dataVenda: orderDate,
         pagamento: {
           metodo: paymentMethod,
@@ -778,9 +785,9 @@ export default function WorkOrderGenerator({ initialVenda, onClose, onSaveSucces
           { id: 'arm-id', nome: frameModel, quantidade: 1, precoVenda: priceTotal * 0.4, precoCusto: priceTotal * 0.2 },
           { id: 'lens-id', nome: lensType, quantity: 1, precoVenda: priceTotal * 0.6, precoCusto: priceTotal * 0.3 } as any
         ],
-        valorTotal: priceTotal,
+        valorTotal: paymentMethod === 'Doação' ? 0 : priceTotal,
         custoTotal: priceTotal * 0.3,
-        lucroTotal: priceTotal * 0.7,
+        lucroTotal: paymentMethod === 'Doação' ? -(priceTotal * 0.3) : priceTotal * 0.7,
         receita: {
           longeEsfericoOD,
           longeEsfericoOE,
@@ -806,7 +813,8 @@ export default function WorkOrderGenerator({ initialVenda, onClose, onSaveSucces
           codigoLente,
           dataReceita
         } as any,
-        status: initialVenda?.status || 'recebido',
+        status: (paymentMethod === 'Doação' ? 'doacao' : (initialVenda?.status || 'recebido')) as any,
+        isDoacao: paymentMethod === 'Doação' ? true : (initialVenda?.isDoacao || undefined),
         dataVenda: orderDate,
         pagamento: {
           metodo: paymentMethod,
@@ -1131,7 +1139,7 @@ export default function WorkOrderGenerator({ initialVenda, onClose, onSaveSucces
               </div>
               <select
                 value={paymentMethod}
-                onChange={(e) => setPaymentMethod(e.target.value)}
+                onChange={(e) => setPointAndCheckDoacao(e.target.value)}
                 className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-white"
               >
                 <option value="Cartão de Crédito">Cartão de Crédito</option>
@@ -1139,6 +1147,7 @@ export default function WorkOrderGenerator({ initialVenda, onClose, onSaveSucces
                 <option value="Pix">Pix</option>
                 <option value="Boleto">Boleto</option>
                 <option value="Dinheiro">Dinheiro</option>
+                <option value="Doação">Doação / Cortesia</option>
               </select>
             </div>
             
