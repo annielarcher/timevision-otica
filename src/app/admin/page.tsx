@@ -369,6 +369,22 @@ export default function AdminPage() {
     // 4. Admin login bypass
     const adminSecret = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'tv-admin-local-fallback';
     if (emailLower === 'admin@timevision.com.br' && loginPassword === adminSecret) {
+      if (auth) {
+        try {
+          const { signInWithEmailAndPassword, createUserWithEmailAndPassword } = await import('firebase/auth');
+          try {
+            await signInWithEmailAndPassword(auth, emailLower, loginPassword);
+          } catch (e: any) {
+            if (e.code === 'auth/user-not-found' || e.code === 'auth/invalid-credential') {
+              await createUserWithEmailAndPassword(auth, emailLower, loginPassword);
+            } else {
+              console.error('Admin Firebase auth error:', e);
+            }
+          }
+        } catch (err) {
+          console.error('Admin Firebase setup error:', err);
+        }
+      }
       setIsAuthenticated(true);
       setCurrentUser({ email: 'admin@timevision.com.br', nome: 'Administrador Local' });
       if (typeof window !== 'undefined') {
@@ -1254,32 +1270,61 @@ export default function AdminPage() {
               <h2 className="text-2xl font-headline font-bold flex items-center gap-2">
                 Visão Geral & Finanças
                 {currentUser?.email === 'admin@timevision.com.br' && (
-                  <button 
-                    onClick={async () => {
-                      if (!confirm('Vincular todas as vendas sem consultor ao Moisés?')) return;
-                      try {
-                        const moises = equipe.find(e => e.nome.toLowerCase().includes('moisés') || e.nome.toLowerCase().includes('moises'));
-                        if (!moises) return alert('Consultor Moisés não encontrado na equipe!');
-                        const vendasAll = await getItems<Venda>('vendas');
-                        let updated = 0;
-                        for (const v of vendasAll) {
-                          if (!v.vendedorId || v.vendedorId === 'admin@timevision.com.br') {
-                            v.vendedorId = moises.email;
-                            v.vendedorNome = moises.nome;
-                            await saveItem('vendas', v);
-                            updated++;
+                  <>
+                    <button 
+                      onClick={async () => {
+                        if (!confirm('Vincular todas as vendas sem consultor ao Moisés?')) return;
+                        try {
+                          const moises = equipe.find(e => e.nome.toLowerCase().includes('moisés') || e.nome.toLowerCase().includes('moises'));
+                          if (!moises) return alert('Consultor Moisés não encontrado na equipe!');
+                          const vendasAll = await getItems<Venda>('vendas');
+                          let updated = 0;
+                          for (const v of vendasAll) {
+                            if (!v.vendedorId || v.vendedorId === 'admin@timevision.com.br') {
+                              v.vendedorId = moises.email;
+                              v.vendedorNome = moises.nome;
+                              await saveItem('vendas', v);
+                              updated++;
+                            }
                           }
+                          alert(`Pronto! ${updated} vendas antigas foram vinculadas ao consultor Moisés.`);
+                          loadData();
+                        } catch (err) {
+                          alert('Erro ao atualizar vendas: ' + err);
                         }
-                        alert(`Pronto! ${updated} vendas antigas foram vinculadas ao consultor Moisés.`);
-                        loadData();
-                      } catch (err) {
-                        alert('Erro ao atualizar vendas: ' + err);
-                      }
-                    }}
-                    className="text-[10px] bg-amber-500/20 text-amber-500 hover:bg-amber-500 hover:text-white px-2 py-1 rounded transition-colors"
-                  >
-                    Vincular Antigas ao Moisés
-                  </button>
+                      }}
+                      className="text-[10px] bg-amber-500/20 text-amber-500 hover:bg-amber-500 hover:text-white px-2 py-1 rounded transition-colors"
+                    >
+                      Vincular Antigas ao Moisés
+                    </button>
+
+                    <button 
+                      onClick={async () => {
+                        if (!confirm('Tem certeza que deseja subir os dados do navegador (LocalStorage) para o Firebase na nuvem? ISSO PODE DUPLICAR DADOS se clicado duas vezes.')) return;
+                        try {
+                          const colecoes = ['equipe', 'eventos', 'clientes', 'produtos', 'vendas', 'laboratorios'];
+                          let total = 0;
+                          for (const col of colecoes) {
+                            const localData = localStorage.getItem(`tv_${col}`);
+                            if (localData) {
+                              const items = JSON.parse(localData);
+                              for (const item of items) {
+                                await saveItem(col, item);
+                                total++;
+                              }
+                            }
+                          }
+                          alert(`Migração completa! ${total} registros foram enviados do navegador para o Firebase.`);
+                          loadData();
+                        } catch (err) {
+                          alert('Erro ao migrar dados: ' + err);
+                        }
+                      }}
+                      className="text-[10px] bg-emerald-500/20 text-emerald-500 hover:bg-emerald-500 hover:text-white px-2 py-1 rounded transition-colors"
+                    >
+                      ☁️ Migrar Dados para Nuvem
+                    </button>
+                  </>
                 )}
               </h2>
               <div className="flex flex-wrap gap-3">
