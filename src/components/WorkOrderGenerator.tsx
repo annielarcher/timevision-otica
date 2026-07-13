@@ -73,24 +73,49 @@ export default function WorkOrderGenerator({ initialVenda, onClose, onSaveSucces
   const [laboratorioId, setLaboratorioId] = useState(initialVenda?.laboratorioId || '');
   const [laboratorios, setLaboratorios] = useState<any[]>([]);
 
+  const [vendedorId, setVendedorId] = useState(initialVenda?.vendedorId || '');
+  const [eventoId, setEventoId] = useState(initialVenda?.eventoId || '');
+  const [eventos, setEventos] = useState<any[]>([]);
+  const [equipe, setEquipe] = useState<any[]>([]);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
   const [isExporting, setIsExporting] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('tv_admin_user');
+      if (stored) {
+        try {
+          setCurrentUser(JSON.parse(stored));
+        } catch (e) {}
+      }
+    }
+  }, []);
 
   useEffect(() => {
     // Fetch detailed client info to get DOB and CEP
     const fetchClient = async () => {
-      if (initialVenda?.clienteId) {
-        try {
-          const { getItemById, getItems } = await import('@/lib/firebase');
+      try {
+        const { getItemById, getItems } = await import('@/lib/firebase');
+        
+        if (initialVenda?.clienteId) {
           const cliente = await getItemById<any>('clientes', initialVenda.clienteId);
           if (cliente) {
             setClientNascimento(cliente.dataNascimento || '');
             setClientCep(cliente.cep || '');
           }
-          const labs = await getItems<any>('laboratorios');
-          setLaboratorios(labs || []);
-        } catch (e) {
-          console.error(e);
         }
+        
+        const labs = await getItems<any>('laboratorios');
+        setLaboratorios(labs || []);
+        
+        const evs = await getItems<any>('eventos');
+        setEventos(evs || []);
+        
+        const eq = await getItems<any>('equipe');
+        setEquipe(eq || []);
+      } catch (e) {
+        console.error(e);
       }
     };
     fetchClient();
@@ -946,6 +971,38 @@ export default function WorkOrderGenerator({ initialVenda, onClose, onSaveSucces
         <div className="border-t border-slate-800 pt-3">
           <h3 className="text-xs font-bold text-primary uppercase tracking-wide mb-3 flex items-center gap-1.5"><ShieldCheck className="h-4 w-4" /> Detalhes da Venda</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {currentUser?.email === 'admin@timevision.com.br' && (
+              <>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[9px] uppercase font-bold text-slate-400">Consultor / Vendedor (Permissão Admin)</label>
+                  <select
+                    value={vendedorId}
+                    onChange={(e) => setVendedorId(e.target.value)}
+                    className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-white focus:outline-none"
+                  >
+                    <option value="">Selecione o consultor...</option>
+                    <option value="admin@timevision.com.br">Administrador</option>
+                    {equipe.map((member) => (
+                      <option key={member.email} value={member.email}>{member.nome}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[9px] uppercase font-bold text-slate-400">Vincular a Evento (Permissão Admin)</label>
+                  <select
+                    value={eventoId}
+                    onChange={(e) => setEventoId(e.target.value)}
+                    className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-white focus:outline-none"
+                  >
+                    <option value="">Selecione a origem...</option>
+                    <option value="loja">Loja Física</option>
+                    {eventos.map((ev) => (
+                      <option key={ev.id} value={ev.id}>{ev.nome}</option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
             <div className="flex flex-col gap-1">
               <label className="text-[9px] uppercase font-bold text-slate-400">Modelo da Armação</label>
               <input
