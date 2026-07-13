@@ -160,6 +160,18 @@ export interface Despesa {
   criadoPor: string;
 }
 
+export interface ConfigFiscal {
+  id?: string;
+  cnpj: string;
+  ie: string;
+  razaoSocial: string;
+  cscId: string;
+  cscToken: string;
+  ambiente: 'homologacao' | 'producao';
+  certificadoSenha?: string;
+  certificadoBase64?: string;
+}
+
 export interface LenteLaboratorio {
   id: string;
   nome: string;
