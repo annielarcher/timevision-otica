@@ -642,13 +642,20 @@ export default function WorkOrderGenerator({ initialVenda, onClose, onSaveSucces
       doc.text('CORTE AQUI PARA SEPARAR AS VIAS', 90, 154);
 
       // Draw dotted cutting line for bottom half (Vertical)
-      for (let i = 160; i < 290; i += 4) {
-        doc.line(105, i, 105, i + 2);
+      if (!isOrcamento) {
+        for (let i = 160; i < 290; i += 4) {
+          doc.line(105, i, 105, i + 2);
+        }
       }
 
-      // Via 2 (Cliente A6) and Via 3 (Lab A6)
-      drawViaClienteA6(doc, 10, 160, logoDataUrl);
-      drawViaLabA6(doc, 108, 160, logoDataUrl);
+      if (isOrcamento) {
+        // For Orcamento, the client and store copies should be identical (A5 horizontal)
+        drawViaContent(doc, 160, 'Via do Cliente (2ª Via)', logoDataUrl);
+      } else {
+        // Via 2 (Cliente A6) and Via 3 (Lab A6)
+        drawViaClienteA6(doc, 10, 160, logoDataUrl);
+        drawViaLabA6(doc, 108, 160, logoDataUrl);
+      }
 
       const docFilename = isOrcamento ? `ORCAMENTO-${orderNumber}` : `OS-${orderNumber}`;
       doc.save(`${docFilename}-${clientName.toLowerCase().replace(/\s+/g, '-')}.pdf`);
@@ -777,7 +784,9 @@ export default function WorkOrderGenerator({ initialVenda, onClose, onSaveSucces
             <FileText className="text-primary h-5.5 w-5.5" /> {isOrcamento ? 'Gerar Proposta de Orçamento' : 'Gerar Ordem de Serviço (O.S.)'}
           </h2>
           <div className="flex items-center gap-3">
-            <span className="text-xs text-muted-foreground bg-slate-800 px-3 py-1 rounded-full font-bold">2 Vias A6 (A4)</span>
+            <span className="text-xs text-muted-foreground bg-slate-800 px-3 py-1 rounded-full font-bold">
+              {isOrcamento ? '2 Vias (Loja/Cliente)' : '3 Vias (Loja/Cliente/Lab)'}
+            </span>
             {onClose && (
               <button 
                 onClick={onClose}
