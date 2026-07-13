@@ -22,12 +22,6 @@ const soligant = localFont({
   display: 'swap',
 });
 
-const identification05C = localFont({
-  src: '../../public/fonts/Identification05C.otf',
-  variable: '--font-identification-05c',
-  display: 'swap',
-});
-
 const title = 'Timevision Ótica';
 const description = 'Atendimento óptico especializado itinerante para empresas, igrejas e pessoa física. Armações e lentes das marcas mais conceituadas sob medida.';
 const imageUrl = '/og-image.png';
@@ -109,7 +103,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="pt-BR" className={cn('dark', lora.variable, soligant.variable, identification05C.variable)}>
+    <html lang="pt-BR" className={cn('dark', lora.variable, soligant.variable)}>
       <head>
         <script
           type="application/ld+json"

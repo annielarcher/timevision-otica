@@ -37,7 +37,7 @@ export default function ColecoesPage() {
   return (
     <section className="py-16 px-6 pt-32 min-h-screen" style={{ background: GRAPHITE }}>
       <div className="max-w-7xl mx-auto">
-        <span className="inline-block px-3 py-1 text-xs mb-4" style={{ background: GOLD, color: OFF_WHITE, fontFamily: "var(--font-identification-05c)", letterSpacing: "0.22em", textTransform: "uppercase" }}>
+        <span className="inline-block px-3 py-1 text-xs mb-4" style={{ background: GOLD, color: OFF_WHITE, fontFamily: "var(--font-lora)", letterSpacing: "0.22em", textTransform: "uppercase" }}>
           Curadoria Timevision
         </span>
         <h1 className="mt-4 mb-10 text-brand-off-white font-display text-4xl md:text-5xl font-bold">Coleções & Grifes</h1>
@@ -51,7 +51,7 @@ export default function ColecoesPage() {
                 onClick={() => setCatFilter(f)} 
                 className="px-4 py-1.5 text-xs uppercase transition-all" 
                 style={{ 
-                  fontFamily: "var(--font-identification-05c)", 
+                  fontFamily: "var(--font-lora)", 
                   letterSpacing: "0.15em", 
                   background: catFilter === f ? GOLD : "transparent", 
                   color: catFilter === f ? OFF_WHITE : "rgba(249,247,248,0.45)", 
@@ -70,7 +70,7 @@ export default function ColecoesPage() {
                 onClick={() => setBrandFilter(b)} 
                 className="px-4 py-1.5 text-xs uppercase transition-all" 
                 style={{ 
-                  fontFamily: "var(--font-identification-05c)", 
+                  fontFamily: "var(--font-lora)", 
                   letterSpacing: "0.15em", 
                   background: brandFilter === b ? PETROL : "transparent", 
                   color: brandFilter === b ? OFF_WHITE : "rgba(249,247,248,0.45)", 
@@ -103,7 +103,7 @@ export default function ColecoesPage() {
                   />
                   <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-all duration-500" />
                   <div className="absolute top-3 left-3">
-                    <span className="inline-block px-3 py-1 text-xs" style={{ background: product.category === "Titânio" ? PETROL : GOLD, color: OFF_WHITE, fontFamily: "var(--font-identification-05c)", letterSpacing: "0.22em", textTransform: "uppercase" }}>
+                    <span className="inline-block px-3 py-1 text-xs" style={{ background: product.category === "Titânio" ? PETROL : GOLD, color: OFF_WHITE, fontFamily: "var(--font-lora)", letterSpacing: "0.22em", textTransform: "uppercase" }}>
                       {product.category}
                     </span>
                   </div>

@@ -37,7 +37,7 @@ export default function LentesPage() {
       <section className="pt-32 pb-16 px-6 relative" style={{ background: PETROL }}>
         <div className="absolute inset-0 opacity-[0.06]" style={{ backgroundImage: diamondPattern, backgroundSize: "40px 40px" }} />
         <div className="max-w-7xl mx-auto relative z-10">
-          <span className="inline-block px-3 py-1 text-xs mb-4" style={{ background: GOLD, color: OFF_WHITE, fontFamily: "var(--font-identification-05c)", letterSpacing: "0.22em", textTransform: "uppercase" }}>
+          <span className="inline-block px-3 py-1 text-xs mb-4" style={{ background: GOLD, color: OFF_WHITE, fontFamily: "var(--font-lora)", letterSpacing: "0.22em", textTransform: "uppercase" }}>
             Tecnologia & Saúde Visual
           </span>
           <h1 className="mt-4 mb-4 text-brand-off-white font-display text-4xl md:text-5xl font-bold">Lentes & Tecnologia</h1>
@@ -59,7 +59,7 @@ export default function LentesPage() {
                     onClick={() => setNeed(need === n ? null : n)} 
                     className="px-4 py-2 text-xs transition-all uppercase" 
                     style={{ 
-                      fontFamily: "var(--font-identification-05c)", 
+                      fontFamily: "var(--font-lora)", 
                       background: need === n ? GRAPHITE : "transparent", 
                       color: need === n ? OFF_WHITE : GRAPHITE, 
                       border: `1px solid ${need === n ? GRAPHITE : "rgba(61,61,61,0.28)"}`, 
@@ -80,7 +80,7 @@ export default function LentesPage() {
                     onClick={() => setCoating(coating === c ? null : c)} 
                     className="px-4 py-2 text-xs transition-all uppercase" 
                     style={{ 
-                      fontFamily: "var(--font-identification-05c)", 
+                      fontFamily: "var(--font-lora)", 
                       background: coating === c ? PETROL : "transparent", 
                       color: coating === c ? OFF_WHITE : GRAPHITE, 
                       border: `1px solid ${coating === c ? PETROL : "rgba(61,61,61,0.28)"}`, 
@@ -99,7 +99,7 @@ export default function LentesPage() {
               <div key={`${l.brand}-${l.name}`} className="p-8 border bg-white flex flex-col justify-between" style={{ borderColor: "rgba(61,61,61,0.1)" }}>
                 <div>
                   <div className="flex items-start justify-between mb-5">
-                    <span className="inline-block px-3 py-1 text-xs" style={{ background: PETROL, color: OFF_WHITE, fontFamily: "var(--font-identification-05c)", letterSpacing: "0.22em", textTransform: "uppercase" }}>
+                    <span className="inline-block px-3 py-1 text-xs" style={{ background: PETROL, color: OFF_WHITE, fontFamily: "var(--font-lora)", letterSpacing: "0.22em", textTransform: "uppercase" }}>
                       {l.brand}
                     </span>
                     <span className="text-xs text-brand-gold font-tagline tracking-widest uppercase font-bold">Certificado</span>
@@ -108,7 +108,7 @@ export default function LentesPage() {
                   <p className="mb-4 text-sm text-brand-gold font-body italic">{l.highlight}</p>
                   <div className="flex flex-wrap gap-1.5 mb-6">
                     {l.fit.map(tag => (
-                      <span key={tag} className="text-xs px-2 py-0.5" style={{ background: `${PETROL}10`, color: PETROL, fontFamily: "var(--font-identification-05c)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                      <span key={tag} className="text-xs px-2 py-0.5" style={{ background: `${PETROL}10`, color: PETROL, fontFamily: "var(--font-lora)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
                         {tag}
                       </span>
                     ))}
