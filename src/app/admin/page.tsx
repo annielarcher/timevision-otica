@@ -81,6 +81,7 @@ export default function AdminPage() {
   // PDV Order state
   const [pdvSaleType, setPdvSaleType] = useState<'venda' | 'orcamento'>('venda');
   const [pdvClienteId, setPdvClienteId] = useState('');
+  const [pdvVendedorId, setPdvVendedorId] = useState('');
   const [pdvEventoId, setPdvEventoId] = useState('');
   const [pdvLaboratorioId, setPdvLaboratorioId] = useState('');
   const [pdvFrameId, setPdvFrameId] = useState('');
@@ -319,6 +320,12 @@ export default function AdminPage() {
     if (lens) sum += lens.precoVenda;
     setPdvPriceTotal(sum);
   }, [pdvFrameId, pdvLensId, produtos]);
+
+  useEffect(() => {
+    if (currentUser?.email) {
+      setPdvVendedorId(currentUser.email);
+    }
+  }, [currentUser]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -604,7 +611,8 @@ export default function AdminPage() {
       endereco: formData.get('endereco') as string,
       dataNascimento: formData.get('dataNascimento') as string,
       criadoEm: editingCliente?.criadoEm || new Date().toISOString(),
-      cadastradoPor: editingCliente?.cadastradoPor || currentUser?.email || 'admin@timevision.com.br'
+      cadastradoPor: (formData.get('cadastradoPor') as string) || editingCliente?.cadastradoPor || currentUser?.email || 'admin@timevision.com.br',
+      eventoId: (formData.get('eventoId') as string) || undefined
     };
 
     if (!clientData.nome || !clientData.cpf) {
@@ -730,11 +738,11 @@ export default function AdminPage() {
   // 7. POS Sale & OS/Budget Generation Trigger
   const handlePdvSale = async (e: React.FormEvent, type: 'venda' | 'orcamento') => {
     e.preventDefault();
-    if (!pdvClienteId || (!pdvFrameId && !pdvLensId)) {
+    if (!pdvClienteId || (!pdvFrameId && !pdvLensId) || !pdvEventoId || !pdvVendedorId) {
       toast({
         variant: 'destructive',
         title: 'Dados Incompletos',
-        description: 'Selecione um cliente e pelo menos um produto (armação ou lente).',
+        description: 'Selecione o cliente, pelo menos um produto, a origem (evento/loja) e o consultor/vendedor.',
       });
       return;
     }
@@ -807,8 +815,8 @@ export default function AdminPage() {
       status: type === 'venda' ? 'recebido' : 'orcamento',
       dataVenda: orderDate,
       validadeOrcamento: type === 'orcamento' ? new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0] : undefined,
-      vendedorId: currentUser?.email || 'admin@timevision.com.br',
-      vendedorNome: currentUser?.nome || 'Consultor Óptico',
+      vendedorId: pdvVendedorId,
+      vendedorNome: equipe.find(m => m.email === pdvVendedorId)?.nome || 'Consultor Óptico',
       eventoId: pdvEventoId !== '' ? pdvEventoId : undefined,
       laboratorioId: pdvLaboratorioId !== '' ? pdvLaboratorioId : undefined,
       laboratorioNome: laboratorios.find(l => l.id === pdvLaboratorioId)?.nome
@@ -1453,7 +1461,7 @@ export default function AdminPage() {
               <CardContent className="pt-6">
                 <form onSubmit={(e) => handlePdvSale(e, pdvSaleType)} className="space-y-6">
                   {/* Select Customer */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                     <div className="flex flex-col gap-1.5">
                       <div className="flex justify-between items-center">
                         <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Cliente da Compra</label>
@@ -1482,6 +1490,22 @@ export default function AdminPage() {
                     </div>
 
                     <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Consultor / Vendedor</label>
+                      <select
+                        value={pdvVendedorId}
+                        onChange={(e) => setPdvVendedorId(e.target.value)}
+                        className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-sm text-white focus:outline-none"
+                        required
+                      >
+                        <option value="">Selecione o consultor...</option>
+                        <option value="admin@timevision.com.br">Administrador</option>
+                        {equipe.map(member => (
+                          <option key={member.email} value={member.email}>{member.nome}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
                       <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Vincular a Evento</label>
                       <select
                         value={pdvEventoId}
@@ -1489,8 +1513,8 @@ export default function AdminPage() {
                         className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-sm text-white focus:outline-none"
                         required
                       >
-                        <option value="">Nenhum evento...</option>
-                        <option value="loja">Loja</option>
+                        <option value="">Selecione a origem...</option>
+                        <option value="loja">Loja Física</option>
                         {eventos.filter(ev => ev.status === 'ativo').map(ev => (
                           <option key={ev.id} value={ev.id}>{ev.nome}</option>
                         ))}
@@ -2303,6 +2327,36 @@ export default function AdminPage() {
                         className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-white"
                         required
                       />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-bold uppercase text-slate-405">Vincular a Evento</label>
+                      <select
+                        name="eventoId"
+                        defaultValue={editingCliente?.eventoId || ''}
+                        className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-white focus:outline-none"
+                      >
+                        <option value="">Selecione a origem...</option>
+                        <option value="loja">Loja Física</option>
+                        {eventos.map(ev => (
+                          <option key={ev.id} value={ev.id}>{ev.nome}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-bold uppercase text-slate-405">Cadastrado por (Consultor)</label>
+                      <select
+                        name="cadastradoPor"
+                        defaultValue={editingCliente?.cadastradoPor || currentUser?.email || 'admin@timevision.com.br'}
+                        className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-white focus:outline-none"
+                      >
+                        <option value="admin@timevision.com.br">Administrador</option>
+                        {equipe.map(member => (
+                          <option key={member.email} value={member.email}>{member.nome}</option>
+                        ))}
+                      </select>
                     </div>
                   </div>
 
