@@ -325,9 +325,8 @@ export default function AdminPage() {
     const emailLower = loginEmail.toLowerCase().trim();
 
     if (loginStep === 'email') {
-      // 1. Master Bypass local check
-      const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-      if (isLocalhost && emailLower === 'admin@timevision.com.br') {
+      // 1. Master Bypass for Admin
+      if (emailLower === 'admin@timevision.com.br') {
         setLoginStep('password');
         return;
       }
@@ -367,9 +366,9 @@ export default function AdminPage() {
       return;
     }
 
-    // 4. Master Bypass login for localhost
-    const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-    if (isLocalhost && emailLower === 'admin@timevision.com.br' && loginPassword === 'timevision123') {
+    // 4. Admin login bypass
+    const adminSecret = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'tv-admin-local-fallback';
+    if (emailLower === 'admin@timevision.com.br' && loginPassword === adminSecret) {
       setIsAuthenticated(true);
       setCurrentUser({ email: 'admin@timevision.com.br', nome: 'Administrador Local' });
       if (typeof window !== 'undefined') {
