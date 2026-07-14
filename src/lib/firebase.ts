@@ -128,6 +128,7 @@ export interface Venda {
   receita?: ReceitaVisual;
   status: 'recebido' | 'laboratorio' | 'montagem' | 'pronto' | 'entregue' | 'orcamento' | 'cancelado' | 'estornado' | 'doacao';
   isDoacao?: boolean;
+  arquivada?: boolean;
   custoErroRefazerLente?: number;
   custoErroDevolucao?: number;
   custoErroDesconto?: number;
@@ -143,6 +144,9 @@ export interface Venda {
     pagamentoNaEntrega?: boolean;
     parcelasPagas?: { [key: number]: boolean };
     datasVencimento?: { [key: number]: string };
+    parcelasNegociacao?: { [key: number]: boolean };
+    datasPagamento?: { [key: number]: string };
+    parcelasFinalizadas?: { [key: number]: boolean };
   };
   validadeOrcamento?: string;
   vendedorId?: string; // Tracks team member email

@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   TrendingUp, Users, Package, ShoppingCart, Sparkles, LogOut, Lock, 
   Search, Plus, Trash2, Edit3, CheckCircle, Clock, Eye, AlertTriangle, Calendar, FlaskConical, Ban,
-  DollarSign, Percent, Heart, ShieldAlert, HelpCircle, Send, AlertCircle, Smartphone
+  DollarSign, Percent, Heart, ShieldAlert, HelpCircle, Send, AlertCircle, Smartphone, MessageSquare, Handshake
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -908,6 +908,28 @@ export default function AdminPage() {
     }
   };
 
+  const handleArchiveOrder = async (venda: Venda) => {
+    try {
+      const updated: Venda = {
+        ...venda,
+        arquivada: true
+      };
+      await saveItem('vendas', updated);
+      toast({
+        title: 'Pedido Finalizado',
+        description: `Ordem de Serviço #${venda.id} finalizada e removida do Kanban de Pedidos.`,
+      });
+      loadData();
+    } catch (err) {
+      console.error(err);
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao Finalizar',
+        description: 'Não foi possível arquivar o pedido.',
+      });
+    }
+  };
+
   const handleSaveSaleErrors = async (venda: Venda) => {
     const updated: Venda = {
       ...venda,
@@ -1036,11 +1058,16 @@ export default function AdminPage() {
 
   const handleMarkInstallmentAsPaid = async (venda: Venda, installmentIndex: number) => {
     try {
+      const todayStr = new Date().toISOString().split('T')[0];
       const updatedPagamento = {
         ...(venda.pagamento || { metodo: 'Boleto', parcelas: '1x', sinal: 0 }),
         parcelasPagas: {
           ...(venda.pagamento?.parcelasPagas || {}),
           [installmentIndex]: true
+        },
+        datasPagamento: {
+          ...(venda.pagamento?.datasPagamento || {}),
+          [installmentIndex]: todayStr
         }
       };
       const updated: Venda = {
@@ -1059,6 +1086,66 @@ export default function AdminPage() {
         variant: 'destructive',
         title: 'Erro ao Atualizar',
         description: 'Não foi possível registrar o pagamento da parcela.',
+      });
+    }
+  };
+
+  const handleToggleInstallmentNegotiation = async (venda: Venda, installmentIndex: number, forceStatus?: boolean) => {
+    try {
+      const isCurrentlyUnderNegotiation = venda.pagamento?.parcelasNegociacao?.[installmentIndex] || false;
+      const newStatus = forceStatus !== undefined ? forceStatus : !isCurrentlyUnderNegotiation;
+      const updatedPagamento = {
+        ...(venda.pagamento || { metodo: 'Boleto', parcelas: '1x', sinal: 0 }),
+        parcelasNegociacao: {
+          ...(venda.pagamento?.parcelasNegociacao || {}),
+          [installmentIndex]: newStatus
+        }
+      };
+      const updated: Venda = {
+        ...venda,
+        pagamento: updatedPagamento
+      };
+      await saveItem('vendas', updated);
+      toast({
+        title: newStatus ? 'Negociação Iniciada' : 'Negociação Removida',
+        description: `Parcela ${installmentIndex} do pedido ${venda.id} foi ${newStatus ? 'marcada como em negociação' : 'removida de negociação'}.`,
+      });
+      loadData();
+    } catch (err: any) {
+      console.error(err);
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao Atualizar',
+        description: 'Erro ao atualizar o status de negociação da parcela.'
+      });
+    }
+  };
+
+  const handleFinalizeInstallment = async (venda: Venda, installmentIndex: number) => {
+    try {
+      const updatedPagamento = {
+        ...(venda.pagamento || { metodo: 'Boleto', parcelas: '1x', sinal: 0 }),
+        parcelasFinalizadas: {
+          ...(venda.pagamento?.parcelasFinalizadas || {}),
+          [installmentIndex]: true
+        }
+      };
+      const updated: Venda = {
+        ...venda,
+        pagamento: updatedPagamento
+      };
+      await saveItem('vendas', updated);
+      toast({
+        title: 'Cobrança Finalizada',
+        description: `Parcela ${installmentIndex} do pedido ${venda.id} foi finalizada e removida do Kanban.`,
+      });
+      loadData();
+    } catch (err: any) {
+      console.error(err);
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao Finalizar',
+        description: 'Erro ao arquivar a cobrança da parcela.',
       });
     }
   };
@@ -1831,6 +1918,7 @@ export default function AdminPage() {
                   { id: 'cancelado', label: 'Cancelado', color: 'border-red-500 text-red-400' }
                 ].map(col => {
                   const colOrders = vendas.filter(v => {
+                    if (v.arquivada) return false;
                     if (v.status !== col.id) return false;
                     if (selectedVendedorId !== 'todos' && v.vendedorId !== selectedVendedorId) return false;
                     if (selectedEventoId !== 'todos') {
@@ -1861,15 +1949,26 @@ export default function AdminPage() {
                           >
                             <div className="flex justify-between items-start mb-2">
                               <span className="font-black text-primary text-sm">#{v.id}</span>
-                              <Button 
-                                onClick={() => setActiveOSVenda(v)}
-                                size="sm" 
-                                variant="ghost" 
-                                className="h-6 w-6 p-0 text-slate-400 hover:text-primary"
-                                title="Visualizar O.S."
-                              >
-                                <Eye className="h-3.5 w-3.5" />
-                              </Button>
+                              <div className="flex gap-1">
+                                <Button 
+                                  onClick={() => handleArchiveOrder(v)}
+                                  size="sm" 
+                                  variant="ghost" 
+                                  className="h-6 w-6 p-0 text-slate-400 hover:text-emerald-400"
+                                  title="Finalizar e Arquivar Pedido"
+                                >
+                                  <CheckCircle className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button 
+                                  onClick={() => setActiveOSVenda(v)}
+                                  size="sm" 
+                                  variant="ghost" 
+                                  className="h-6 w-6 p-0 text-slate-400 hover:text-primary"
+                                  title="Visualizar O.S."
+                                >
+                                  <Eye className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
                             </div>
                             <div className="font-bold text-sm text-slate-200 truncate" title={v.clienteNome}>{v.clienteNome}</div>
                             <div className="text-[10px] text-slate-400 mt-1 uppercase">Lab: <span className="font-bold text-slate-300">{v.laboratorioNome || 'Não definido'}</span></div>
@@ -2947,14 +3046,27 @@ export default function AdminPage() {
                 sinalProj.entradas += remaining;
               }
             } else {
-              // Custom installments (Boleto/Crediário) are split over subsequent months
+              // Custom installments (Boleto/Crediário) are split over subsequent months or payment months
               const installmentValue = remaining / numInstallments;
               for (let i = 1; i <= numInstallments; i++) {
-                const dueDate = new Date(saleDateObj.getFullYear(), saleDateObj.getMonth() + i, saleDateObj.getDate());
-                const dueMonthKey = dueDate.toISOString().substring(0, 7);
-                const dueProj = next6Months.find(m => m.key === dueMonthKey);
-                if (dueProj) {
-                  dueProj.entradas += installmentValue;
+                const isPaga = v.pagamento?.parcelasPagas?.[i] || false;
+                const payDateStr = v.pagamento?.datasPagamento?.[i];
+
+                let targetMonthKey = '';
+                if (isPaga && payDateStr) {
+                  targetMonthKey = payDateStr.substring(0, 7);
+                } else {
+                  let dueDateStr = v.pagamento?.datasVencimento?.[i];
+                  if (!dueDateStr) {
+                    const dueDate = new Date(saleDateObj.getFullYear(), saleDateObj.getMonth() + i, saleDateObj.getDate());
+                    dueDateStr = dueDate.toISOString().split('T')[0];
+                  }
+                  targetMonthKey = dueDateStr.substring(0, 7);
+                }
+
+                const targetProj = next6Months.find(m => m.key === targetMonthKey);
+                if (targetProj) {
+                  targetProj.entradas += installmentValue;
                 }
               }
             }
@@ -3878,6 +3990,7 @@ export default function AdminPage() {
             dataVencimento: string;
             isPaga: boolean;
             isAtrasada: boolean;
+            isNegociacao: boolean;
             vendaOriginal: Venda;
             index: number;
           }
@@ -3889,22 +4002,27 @@ export default function AdminPage() {
             const method = v.pagamento?.metodo || '';
             const installmentsStr = v.pagamento?.parcelas || '1x';
             const numInstallments = parseInt(installmentsStr) || 1;
+            const isExcluded = method === 'Cartão de Crédito' || method === 'Doação';
 
-            if (method !== 'Cartão de Crédito' && numInstallments > 1) {
+            if (!isExcluded) {
               const saleDateObj = new Date(v.dataVenda);
               if (isNaN(saleDateObj.getTime())) return;
 
               const total = v.valorTotal || 0;
               const sinal = v.pagamento?.sinal || 0;
               const remaining = total - sinal;
-              const installmentValue = remaining / numInstallments;
+              const installmentValue = numInstallments > 1 ? remaining / numInstallments : (remaining > 0 ? remaining : total);
 
               for (let i = 1; i <= numInstallments; i++) {
-                const isPaga = v.pagamento?.parcelasPagas?.[i] || false;
+                const isPaga = v.pagamento?.parcelasPagas?.[i] || (numInstallments === 1 && remaining === 0);
+                const isNegociacao = v.pagamento?.parcelasNegociacao?.[i] || false;
+                const isFinalizada = v.pagamento?.parcelasFinalizadas?.[i] || false;
+
+                if (isFinalizada) continue;
 
                 let dueDateStr = v.pagamento?.datasVencimento?.[i];
                 if (!dueDateStr) {
-                  const dueDate = new Date(saleDateObj.getFullYear(), saleDateObj.getMonth() + i, saleDateObj.getDate());
+                  const dueDate = new Date(saleDateObj.getFullYear(), saleDateObj.getMonth() + (numInstallments > 1 ? i : 0), saleDateObj.getDate());
                   dueDateStr = dueDate.toISOString().split('T')[0];
                 }
 
@@ -3922,6 +4040,7 @@ export default function AdminPage() {
                   dataVencimento: dueDateStr,
                   isPaga,
                   isAtrasada,
+                  isNegociacao,
                   vendaOriginal: v,
                   index: i
                 });
@@ -3938,21 +4057,148 @@ export default function AdminPage() {
           const totalVencidoCount = totalVencido.length;
           const taxaAdimplencia = totalVencidoCount > 0 ? (totalPaidCount / totalVencidoCount) * 100 : 100;
 
-          // 3. Filter list based on search and status
+          // 3. Filter list based on search query
           const filteredInstallments = allInstallments.filter(inst => {
             const query = cobrancaSearch.toLowerCase();
-            const matchesSearch = 
+            return (
               inst.clienteNome.toLowerCase().includes(query) ||
               inst.clienteCpf.toLowerCase().includes(query) ||
-              inst.saleId.toLowerCase().includes(query);
-
-            if (!matchesSearch) return false;
-
-            if (cobrancaStatusFilter === 'atrasados') return inst.isAtrasada;
-            if (cobrancaStatusFilter === 'pendentes') return !inst.isPaga && !inst.isAtrasada;
-            if (cobrancaStatusFilter === 'pagos') return inst.isPaga;
-            return true;
+              inst.saleId.toLowerCase().includes(query)
+            );
           });
+
+          // 4. Split into Kanban Columns
+          const colAtrasados = filteredInstallments.filter(inst => !inst.isPaga && inst.isAtrasada && !inst.isNegociacao);
+          const colNoPrazo = filteredInstallments.filter(inst => !inst.isPaga && !inst.isAtrasada && !inst.isNegociacao);
+          const colNegociacao = filteredInstallments.filter(inst => !inst.isPaga && inst.isNegociacao);
+          const colPagos = filteredInstallments.filter(inst => inst.isPaga);
+
+          const sumAtrasados = colAtrasados.reduce((acc, inst) => acc + inst.valor, 0);
+          const sumNoPrazo = colNoPrazo.reduce((acc, inst) => acc + inst.valor, 0);
+          const sumNegociacao = colNegociacao.reduce((acc, inst) => acc + inst.valor, 0);
+          const sumPagos = colPagos.reduce((acc, inst) => acc + inst.valor, 0);
+
+          const renderKanbanCard = (inst: InstallmentItem, type: 'atrasado' | 'noPrazo' | 'negociacao' | 'pago') => {
+            const [year, month, day] = inst.dataVencimento.split('-');
+            const formattedDueDate = `${day}/${month}/${year}`;
+            
+            const cleanPhone = inst.clienteTelefone.replace(/\D/g, '');
+            const formattedPhone = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
+
+            const messageText = inst.isAtrasada
+              ? `Olá ${inst.clienteNome}, tudo bem? Identificamos que a parcela ${inst.parcelaLabel} no valor de R$ ${inst.valor.toFixed(2)}, com vencimento em ${formattedDueDate}, referente à sua Ordem de Serviço #${inst.saleId}, está pendente. Poderia por gentileza nos enviar o comprovante de pagamento? Obrigado!`
+              : `Olá ${inst.clienteNome}, tudo bem? Lembramos que a parcela ${inst.parcelaLabel} no valor de R$ ${inst.valor.toFixed(2)}, referente à sua Ordem de Serviço #${inst.saleId}, vencerá em ${formattedDueDate}. Qualquer dúvida estamos à disposição!`;
+
+            const encodedMessage = encodeURIComponent(messageText);
+            const waUrl = `https://wa.me/${formattedPhone}?text=${encodedMessage}`;
+
+            // Calculate delay / upcoming days count
+            let delayOrUpcomingLabel = '';
+            if (type === 'negociacao') {
+              delayOrUpcomingLabel = 'Em Negociação';
+            } else if (type === 'atrasado') {
+              const diffTime = Math.abs(today.getTime() - new Date(inst.dataVencimento).getTime());
+              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+              delayOrUpcomingLabel = `Atrasado há ${diffDays} ${diffDays === 1 ? 'dia' : 'dias'}`;
+            } else if (type === 'noPrazo') {
+              const diffTime = new Date(inst.dataVencimento).getTime() - today.getTime();
+              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+              delayOrUpcomingLabel = diffDays <= 0 ? 'Vence hoje' : `Vence em ${diffDays} ${diffDays === 1 ? 'dia' : 'dias'}`;
+            }
+
+            return (
+              <div key={inst.id} className="bg-slate-950 border border-slate-850 hover:border-slate-800 rounded-xl p-3.5 space-y-2.5 transition-all shadow-sm">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <span className="text-[10px] font-mono font-bold text-slate-500 block">OS #{inst.saleId}</span>
+                    <span className="text-xs font-bold text-white block truncate max-w-[140px]" title={inst.clienteNome}>
+                      {inst.clienteNome}
+                    </span>
+                  </div>
+                  <span className="bg-slate-850 text-slate-350 text-[9px] font-black px-1.5 py-0.5 rounded">
+                    Parcela {inst.parcelaLabel}
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-end">
+                  <div>
+                    <span className="text-[10px] text-slate-450 block">Vencimento: {formattedDueDate}</span>
+                    {delayOrUpcomingLabel && (
+                      <span className={`text-[9px] font-bold block ${
+                        type === 'atrasado' ? 'text-red-500' :
+                        type === 'negociacao' ? 'text-amber-400' :
+                        'text-blue-400'
+                      }`}>
+                        {delayOrUpcomingLabel}
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-sm font-black text-slate-200">
+                    R$ {inst.valor.toFixed(2)}
+                  </span>
+                </div>
+
+                {type !== 'pago' && (
+                  <div className="flex gap-1 pt-2 border-t border-slate-850/80">
+                    <button
+                      type="button"
+                      onClick={() => handleMarkInstallmentAsPaid(inst.vendaOriginal, inst.index)}
+                      className="flex-1 bg-emerald-700/10 border border-emerald-700/20 text-emerald-400 hover:bg-emerald-700/20 rounded-md text-[10px] font-bold py-1.5 flex items-center justify-center gap-1 transition-colors"
+                      title="Marcar como Pago"
+                    >
+                      <CheckCircle size={11} /> Pago
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setReschedulingInstallment(inst);
+                        setRescheduleNewDate(inst.dataVencimento);
+                      }}
+                      className="flex bg-slate-900 border border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-white rounded-md text-[10px] font-bold px-2 py-1.5 items-center justify-center gap-1 transition-all"
+                      title="Reagendar Vencimento"
+                    >
+                      <Calendar size={11} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleInstallmentNegotiation(inst.vendaOriginal, inst.index)}
+                      className={`flex border rounded-md text-[10px] font-bold px-2 py-1.5 items-center justify-center gap-1 transition-all ${
+                        inst.isNegociacao 
+                          ? 'bg-amber-600/20 border-amber-600/40 text-amber-400' 
+                          : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-white'
+                      }`}
+                      title={inst.isNegociacao ? "Remover de Negociação" : "Marcar como em Negociação"}
+                    >
+                      <Handshake size={11} />
+                    </button>
+                    <a
+                      href={waUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => handleToggleInstallmentNegotiation(inst.vendaOriginal, inst.index, true)}
+                      className="flex items-center justify-center bg-slate-900 border border-slate-800 text-brand-gold hover:bg-slate-850 hover:text-white rounded-md text-[10px] font-bold px-2 py-1.5 transition-colors gap-1"
+                      title="Enviar WhatsApp e Mover p/ Negociação"
+                    >
+                      <Send size={11} />
+                    </a>
+                  </div>
+                )}
+
+                {type === 'pago' && (
+                  <div className="flex pt-2 border-t border-slate-850/80">
+                    <button
+                      type="button"
+                      onClick={() => handleFinalizeInstallment(inst.vendaOriginal, inst.index)}
+                      className="w-full bg-emerald-700/10 border border-emerald-700/20 text-emerald-400 hover:bg-emerald-700/20 rounded-md text-[10px] font-bold py-1.5 flex items-center justify-center gap-1 transition-colors"
+                      title="Finalizar e Arquivar Cobrança"
+                    >
+                      <CheckCircle size={11} /> Finalizar Cobrança
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          };
 
           return (
             <div className="space-y-8 animate-in fade-in duration-300">
@@ -4023,152 +4269,108 @@ export default function AdminPage() {
               </div>
 
               {/* Main Panel Content */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                 
-                {/* Installments List & Filters */}
-                <div className="lg:col-span-2 space-y-6">
-                  <Card className="bg-slate-900 border-slate-800 shadow">
-                    <CardHeader className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                      <div>
-                        <CardTitle className="text-lg font-bold text-slate-200">Fila de Recebimentos</CardTitle>
-                        <CardDescription>Auditoria de parcelas em aberto e cobranças ativas.</CardDescription>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-3">
-                        <div className="relative w-48">
-                          <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-500" />
-                          <input
-                            type="text"
-                            placeholder="Buscar cliente, CPF, ID..."
-                            value={cobrancaSearch}
-                            onChange={(e) => setCobrancaSearch(e.target.value)}
-                            className="bg-slate-950 border border-slate-850 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white focus:outline-none focus:border-primary w-full"
-                          />
+                {/* Kanban Board */}
+                <div className="lg:col-span-3 space-y-4">
+                  {/* search input */}
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900 p-4 rounded-xl border border-slate-800 shadow">
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-200">Fluxo de Cobrança</h3>
+                      <p className="text-xs text-slate-450">Monitore, marque como pago ou cobre parcelamentos ativos.</p>
+                    </div>
+                    <div className="relative w-full md:w-72">
+                      <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-500" />
+                      <input
+                        type="text"
+                        placeholder="Buscar cliente, CPF ou O.S. ID..."
+                        value={cobrancaSearch}
+                        onChange={(e) => setCobrancaSearch(e.target.value)}
+                        className="bg-slate-950 border border-slate-850 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white focus:outline-none focus:border-primary w-full"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Kanban Columns Grid */}
+                  <div className="grid grid-cols-1 xl:grid-cols-4 md:grid-cols-2 gap-4 items-start">
+                    
+                    {/* Column 1: No Prazo */}
+                    <div className="bg-slate-900/60 border border-slate-850 rounded-xl overflow-hidden shadow">
+                      <div className="bg-blue-500/10 border-b border-blue-500/20 px-3 py-3 flex justify-between items-center">
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-blue-400"></span>
+                          <span className="text-xs font-black uppercase text-blue-400 tracking-wider">No Prazo</span>
+                          <span className="bg-blue-500/20 text-blue-400 text-[10px] font-bold px-1.5 py-0.5 rounded-full">{colNoPrazo.length}</span>
                         </div>
-                        <select
-                          value={cobrancaStatusFilter}
-                          onChange={(e) => setCobrancaStatusFilter(e.target.value as any)}
-                          className="bg-slate-950 border border-slate-850 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none"
-                        >
-                          <option value="todos">Todos Status</option>
-                          <option value="atrasados">Atrasados</option>
-                          <option value="pendentes">No Prazo</option>
-                          <option value="pagos">Pagos</option>
-                        </select>
+                        <span className="text-xs font-black text-blue-400">R$ {sumNoPrazo.toFixed(2)}</span>
                       </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-left text-xs border-collapse">
-                          <thead>
-                            <tr className="border-b border-slate-800 text-slate-400 uppercase tracking-widest text-[9px] font-bold">
-                              <th className="py-3 px-2">Pedido</th>
-                              <th className="py-3 px-2">Cliente / CPF</th>
-                              <th className="py-3 px-2">Parcela</th>
-                              <th className="py-3 px-2">Valor</th>
-                              <th className="py-3 px-2">Vencimento</th>
-                              <th className="py-3 px-2">Status</th>
-                              <th className="py-3 px-2 text-right">Ações</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {filteredInstallments.length === 0 ? (
-                              <tr>
-                                <td colSpan={7} className="py-6 text-center text-slate-500 italic">Nenhum registro de parcelamento encontrado.</td>
-                              </tr>
-                            ) : (
-                              filteredInstallments.map(inst => {
-                                const [year, month, day] = inst.dataVencimento.split('-');
-                                const formattedDueDate = `${day}/${month}/${year}`;
-
-                                const cleanPhone = inst.clienteTelefone.replace(/\D/g, '');
-                                const formattedPhone = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
-
-                                const messageText = inst.isAtrasada
-                                  ? `Olá ${inst.clienteNome}, tudo bem? Identificamos que a parcela ${inst.parcelaLabel} no valor de R$ ${inst.valor.toFixed(2)}, com vencimento em ${formattedDueDate}, referente à sua Ordem de Serviço #${inst.saleId}, está pendente. Poderia por gentileza nos enviar o comprovante de pagamento? Obrigado!`
-                                  : `Olá ${inst.clienteNome}, tudo bem? Lembramos que a parcela ${inst.parcelaLabel} no valor de R$ ${inst.valor.toFixed(2)}, referente à sua Ordem de Serviço #${inst.saleId}, vencerá em ${formattedDueDate}. Qualquer dúvida estamos à disposição!`;
-
-                                const encodedMessage = encodeURIComponent(messageText);
-                                const waUrl = `https://wa.me/${formattedPhone}?text=${encodedMessage}`;
-
-                                return (
-                                  <tr key={inst.id} className="border-b border-slate-850 hover:bg-slate-950/40">
-                                    <td className="py-4 px-2 font-mono font-bold text-slate-350">
-                                      {inst.saleId}
-                                    </td>
-                                    <td className="py-4 px-2">
-                                      <div className="font-bold text-white">{inst.clienteNome}</div>
-                                      <div className="text-[10px] text-slate-500">CPF: {inst.clienteCpf || 'N/A'}</div>
-                                    </td>
-                                    <td className="py-4 px-2 font-bold text-slate-400">
-                                      {inst.parcelaLabel}
-                                    </td>
-                                    <td className="py-4 px-2 font-black text-slate-200">
-                                      R$ {inst.valor.toFixed(2)}
-                                    </td>
-                                    <td className="py-4 px-2 font-medium text-slate-300">
-                                      {formattedDueDate}
-                                    </td>
-                                    <td className="py-4 px-2">
-                                      {inst.isPaga ? (
-                                        <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[9px] px-2 py-0.5 rounded font-bold uppercase flex items-center gap-1 w-fit">
-                                          <CheckCircle size={10} /> Pago
-                                        </span>
-                                      ) : inst.isAtrasada ? (
-                                        <span className="bg-red-500/10 text-red-500 border border-red-500/30 text-[9px] px-2 py-0.5 rounded font-bold uppercase flex items-center gap-1 w-fit animate-pulse">
-                                          <AlertTriangle size={10} /> Atrasado
-                                        </span>
-                                      ) : (
-                                        <span className="bg-blue-500/10 text-blue-400 border border-blue-500/30 text-[9px] px-2 py-0.5 rounded font-bold uppercase flex items-center gap-1 w-fit">
-                                          <Clock size={10} /> No Prazo
-                                        </span>
-                                      )}
-                                    </td>
-                                    <td className="py-4 px-2 text-right">
-                                      <div className="flex gap-2 justify-end">
-                                        {!inst.isPaga && (
-                                          <>
-                                            <Button
-                                              type="button"
-                                              onClick={() => handleMarkInstallmentAsPaid(inst.vendaOriginal, inst.index)}
-                                              className="bg-emerald-700 hover:bg-emerald-600 text-xs px-2.5 py-1.5 h-auto font-bold flex items-center gap-1"
-                                              title="Marcar como Pago"
-                                            >
-                                              <CheckCircle size={10} /> Confirmar Pago
-                                            </Button>
-                                            <Button
-                                              type="button"
-                                              onClick={() => {
-                                                setReschedulingInstallment(inst);
-                                                setRescheduleNewDate(inst.dataVencimento);
-                                              }}
-                                              variant="outline"
-                                              className="border-slate-800 text-slate-400 text-xs px-2.5 py-1.5 h-auto font-bold flex items-center gap-1 hover:bg-slate-850 hover:text-white"
-                                              title="Alterar Data de Vencimento"
-                                            >
-                                              <Calendar size={10} /> Reagendar
-                                            </Button>
-                                            <a
-                                              href={waUrl}
-                                              target="_blank"
-                                              rel="noopener noreferrer"
-                                              className="inline-flex items-center justify-center bg-slate-950 border border-slate-800 text-brand-gold hover:bg-slate-850 hover:text-white rounded-lg text-xs font-bold px-2 py-1.5 h-auto transition-colors gap-1"
-                                              title="Enviar WhatsApp de Cobrança"
-                                            >
-                                              <Send size={10} /> Cobrar
-                                            </a>
-                                          </>
-                                        )}
-                                      </div>
-                                    </td>
-                                  </tr>
-                                );
-                              })
-                            )}
-                          </tbody>
-                        </table>
+                      <div className="p-3 space-y-3 max-h-[550px] overflow-y-auto pr-1">
+                        {colNoPrazo.length === 0 ? (
+                          <div className="text-center py-8 text-slate-550 text-xs italic font-medium">Nenhuma parcela a vencer no prazo.</div>
+                        ) : (
+                          colNoPrazo.map(inst => renderKanbanCard(inst, 'noPrazo'))
+                        )}
                       </div>
-                    </CardContent>
-                  </Card>
+                    </div>
+
+                    {/* Column 2: Atrasados */}
+                    <div className="bg-slate-900/60 border border-slate-850 rounded-xl overflow-hidden shadow">
+                      <div className="bg-red-500/10 border-b border-red-500/20 px-3 py-3 flex justify-between items-center">
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                          <span className="text-xs font-black uppercase text-red-400 tracking-wider">Atrasados</span>
+                          <span className="bg-red-500/20 text-red-400 text-[10px] font-bold px-1.5 py-0.5 rounded-full">{colAtrasados.length}</span>
+                        </div>
+                        <span className="text-xs font-black text-red-400">R$ {sumAtrasados.toFixed(2)}</span>
+                      </div>
+                      <div className="p-3 space-y-3 max-h-[550px] overflow-y-auto pr-1">
+                        {colAtrasados.length === 0 ? (
+                          <div className="text-center py-8 text-slate-550 text-xs italic font-medium">Nenhuma cobrança atrasada! 🎉</div>
+                        ) : (
+                          colAtrasados.map(inst => renderKanbanCard(inst, 'atrasado'))
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Column 3: Em Negociação */}
+                    <div className="bg-slate-900/60 border border-slate-850 rounded-xl overflow-hidden shadow">
+                      <div className="bg-amber-500/10 border-b border-amber-500/20 px-3 py-3 flex justify-between items-center">
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                          <span className="text-xs font-black uppercase text-amber-400 tracking-wider">Em Negociação</span>
+                          <span className="bg-amber-500/20 text-amber-400 text-[10px] font-bold px-1.5 py-0.5 rounded-full">{colNegociacao.length}</span>
+                        </div>
+                        <span className="text-xs font-black text-amber-400">R$ {sumNegociacao.toFixed(2)}</span>
+                      </div>
+                      <div className="p-3 space-y-3 max-h-[550px] overflow-y-auto pr-1">
+                        {colNegociacao.length === 0 ? (
+                          <div className="text-center py-8 text-slate-550 text-xs italic font-medium">Nenhuma parcela em negociação.</div>
+                        ) : (
+                          colNegociacao.map(inst => renderKanbanCard(inst, 'negociacao'))
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Column 4: Pagos */}
+                    <div className="bg-slate-900/60 border border-slate-850 rounded-xl overflow-hidden shadow">
+                      <div className="bg-emerald-500/10 border-b border-emerald-500/20 px-3 py-3 flex justify-between items-center">
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                          <span className="text-xs font-black uppercase text-emerald-400 tracking-wider">Pagos</span>
+                          <span className="bg-emerald-500/20 text-emerald-400 text-[10px] font-bold px-1.5 py-0.5 rounded-full">{colPagos.length}</span>
+                        </div>
+                        <span className="text-xs font-black text-emerald-400">R$ {sumPagos.toFixed(2)}</span>
+                      </div>
+                      <div className="p-3 space-y-3 max-h-[550px] overflow-y-auto pr-1">
+                        {colPagos.length === 0 ? (
+                          <div className="text-center py-8 text-slate-550 text-xs italic font-medium">Nenhum pagamento registrado.</div>
+                        ) : (
+                          colPagos.slice(-15).map(inst => renderKanbanCard(inst, 'pago'))
+                        )}
+                      </div>
+                    </div>
+
+                  </div>
                 </div>
 
                 {/* Billing Configuration Form */}
