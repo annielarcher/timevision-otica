@@ -17,18 +17,19 @@ const FONT_BODY = "var(--font-lora)";
 const FONT_LABEL = "var(--font-lora)";
 
 export default function RastreamentoPage() {
-  const [query, setQuery] = useState("");
+  const [queryOs, setQueryOs] = useState("");
+  const [queryCpf, setQueryCpf] = useState("");
   const [order, setOrder] = useState<Venda | null>(null);
   const [searched, setSearched] = useState(false);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
   const handleSearch = async () => {
-    if (!query.trim()) {
+    if (!queryOs.trim() || !queryCpf.trim()) {
       toast({
         variant: "destructive",
-        title: "Campo Vazio",
-        description: "Digite o CPF ou número do pedido para buscar.",
+        title: "Campos Incompletos",
+        description: "Digite o Número da O.S. e o seu CPF para buscar.",
       });
       return;
     }
@@ -39,20 +40,27 @@ export default function RastreamentoPage() {
 
     try {
       const sales = await getItems<Venda>("vendas");
-      const cleanQuery = query.trim().toUpperCase().replace(/[.-]/g, "");
+      const cleanOs = queryOs.trim().toUpperCase().replace('TV-', '');
+      const cleanCpfInput = queryCpf.trim().replace(/[.-]/g, "");
 
       const found = sales.find((s) => {
         if (s.status === 'orcamento') return false;
-        const cleanCpf = s.clienteCpf.replace(/[.-]/g, "");
-        return (
-          s.id.toUpperCase() === cleanQuery || 
-          cleanCpf === cleanQuery || 
-          s.id.toUpperCase() === `TV-${cleanQuery}`
-        );
+        const cleanDbCpf = s.clienteCpf.replace(/[.-]/g, "");
+        return s.id.toUpperCase() === cleanOs && cleanDbCpf === cleanCpfInput;
       });
 
       if (found) {
-        setOrder(found);
+        // Mascarar PII para exibição pública
+        const nameParts = found.clienteNome.split(' ');
+        const maskedName = nameParts.map(part => part.length > 2 ? `${part[0]}***` : part).join(' ');
+        setOrder({
+          ...found,
+          clienteNome: maskedName,
+          clienteCpf: '***.***.***-**',
+          clienteTelefone: '(**) 9****-****',
+          clienteEmail: '***@***.com',
+          clienteEndereco: '***'
+        });
       } else {
         toast({
           variant: "destructive",
@@ -114,19 +122,28 @@ export default function RastreamentoPage() {
           <p className="mt-2 text-sm text-brand-gray-mid font-body">Consulte o status de confecção dos seus óculos em tempo real</p>
         </div>
 
-        <div className="flex gap-2 mb-3">
+        <div className="flex flex-col sm:flex-row gap-2 mb-3">
           <input 
             type="text" 
-            placeholder="CPF ou número da O.S. (ex: 1001)" 
-            value={query} 
-            onChange={e => setQuery(e.target.value)} 
+            placeholder="Número da O.S. (ex: 1001)" 
+            value={queryOs} 
+            onChange={e => setQueryOs(e.target.value)} 
+            onKeyDown={e => e.key === "Enter" && handleSearch()} 
+            className="flex-1 p-4 outline-none border" 
+            style={{ fontFamily: FONT_BODY, borderColor: "rgba(61,61,61,0.2)", background: "#fff", color: GRAPHITE }} 
+          />
+          <input 
+            type="text" 
+            placeholder="Seu CPF (apenas números)" 
+            value={queryCpf} 
+            onChange={e => setQueryCpf(e.target.value)} 
             onKeyDown={e => e.key === "Enter" && handleSearch()} 
             className="flex-1 p-4 outline-none border" 
             style={{ fontFamily: FONT_BODY, borderColor: "rgba(61,61,61,0.2)", background: "#fff", color: GRAPHITE }} 
           />
           <button 
             onClick={handleSearch} 
-            className="px-5 flex items-center justify-center transition-opacity hover:opacity-80" 
+            className="px-5 py-4 flex items-center justify-center transition-opacity hover:opacity-80" 
             style={{ background: GRAPHITE, color: OFF_WHITE, minWidth: "52px" }}
           >
             {loading ? (
@@ -137,14 +154,14 @@ export default function RastreamentoPage() {
           </button>
         </div>
         <p className="text-[10px] text-center text-brand-gray-mid/60 mb-10 font-body italic">
-          Busque pelo CPF cadastrado na compra ou pelo número da Ordem de Serviço.
+          Por segurança, exigimos o número da Ordem de Serviço e o CPF do titular para realizar a busca.
         </p>
 
         {searched && !order && !loading && (
           <div className="text-center p-8 border bg-white" style={{ borderColor: "rgba(61,61,61,0.12)" }}>
             <AlertCircle size={30} color={WINE} className="mx-auto mb-3" />
-            <p className="font-body text-brand-graphite">Nenhum pedido ativo encontrado para <strong>"{query}"</strong>.</p>
-            <p className="mt-2 text-xs text-brand-gray-mid font-body">Verifique o número da O.S. ou entre em contato com nosso atendimento.</p>
+            <p className="font-body text-brand-graphite">Nenhum pedido ativo encontrado para esta combinação.</p>
+            <p className="mt-2 text-xs text-brand-gray-mid font-body">Verifique o número da O.S. e o CPF ou entre em contato com nosso atendimento.</p>
           </div>
         )}
 

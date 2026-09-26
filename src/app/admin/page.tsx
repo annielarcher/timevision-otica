@@ -313,24 +313,7 @@ export default function AdminPage() {
     getItems<MembroEquipe>('equipe').then(setEquipe).catch(console.error);
     getItems<Evento>('eventos').then(setEventos).catch(console.error);
 
-    const checkLocalhostBypass = () => {
-      const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-      if (isLocalhost) {
-        const storedUser = localStorage.getItem('tv_admin_user');
-        const isAuth = localStorage.getItem('tv_admin_auth') === 'true';
-        if (isAuth && storedUser) {
-           const parsedUser = JSON.parse(storedUser);
-           if (parsedUser.email === 'admin@timevision.com.br') {
-             setIsAuthenticated(true);
-             setCurrentUser(parsedUser);
-             loadData();
-             setIsLoadingAuth(false);
-             return true;
-           }
-        }
-      }
-      return false;
-    };
+    // checkLocalhostBypass removido (segurança)
 
     if (typeof window !== 'undefined') {
       // Check if this is a password reset redirect
@@ -359,13 +342,11 @@ export default function AdminPage() {
             }
             loadData();
           } else {
-            if (!checkLocalhostBypass()) {
-              setIsAuthenticated(false);
-              setCurrentUser(null);
-              if (typeof window !== 'undefined') {
-                localStorage.removeItem('tv_admin_auth');
-                localStorage.removeItem('tv_admin_user');
-              }
+            setIsAuthenticated(false);
+            setCurrentUser(null);
+            if (typeof window !== 'undefined') {
+              localStorage.removeItem('tv_admin_auth');
+              localStorage.removeItem('tv_admin_user');
             }
           }
           setIsLoadingAuth(false);
@@ -403,18 +384,60 @@ export default function AdminPage() {
     }
   }, [currentUser]);
 
+  const checkRateLimit = (action: string, email: string) => {
+    const key = `tv_limit_${action}_${email}`;
+    const attemptsStr = localStorage.getItem(key);
+    if (attemptsStr) {
+      const attempts = JSON.parse(attemptsStr);
+      if (attempts.count >= 5) {
+        const backoffMinutes = Math.pow(2, attempts.count - 5) * 5; // 5, 10, 20...
+        const lockoutEnd = new Date(attempts.lastAttempt).getTime() + (backoffMinutes * 60 * 1000);
+        if (Date.now() < lockoutEnd) {
+          const remaining = Math.ceil((lockoutEnd - Date.now()) / 60000);
+          return { allowed: false, remaining };
+        }
+      }
+    }
+    return { allowed: true };
+  };
+
+  const registerFailedAttempt = (action: string, email: string) => {
+    const key = `tv_limit_${action}_${email}`;
+    const attemptsStr = localStorage.getItem(key);
+    let count = 1;
+    if (attemptsStr) {
+      count = JSON.parse(attemptsStr).count + 1;
+    }
+    localStorage.setItem(key, JSON.stringify({ count, lastAttempt: new Date().toISOString() }));
+  };
+
+  const resetAttempts = (action: string, email: string) => {
+    localStorage.removeItem(`tv_limit_${action}_${email}`);
+  };
+
+  const hashPasswordLocal = async (password: string) => {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(password);
+    const hash = await crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     const emailLower = loginEmail.toLowerCase().trim();
 
-    if (loginStep === 'email') {
-      // 1. Master Bypass for Admin
-      if (emailLower === 'admin@timevision.com.br') {
-        setLoginStep('password');
-        return;
-      }
+    const limit = checkRateLimit('login', emailLower);
+    if (!limit.allowed) {
+      toast({
+        variant: 'destructive',
+        title: 'Muitas tentativas',
+        description: `Tente novamente em ${limit.remaining} minutos.`,
+      });
+      return;
+    }
 
-      // 2. Check if email belongs to authorized team
+    if (loginStep === 'email') {
+      // 1. Check if email belongs to authorized team
       const teamMember = equipe.find(m => m.email.toLowerCase() === emailLower);
       if (!teamMember) {
         toast({
@@ -449,39 +472,6 @@ export default function AdminPage() {
       return;
     }
 
-    // 4. Admin login bypass
-    const adminSecret = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'tv-admin-local-fallback';
-    if (emailLower === 'admin@timevision.com.br' && loginPassword === adminSecret) {
-      if (auth) {
-        try {
-          const { signInWithEmailAndPassword, createUserWithEmailAndPassword } = await import('firebase/auth');
-          try {
-            await signInWithEmailAndPassword(auth, emailLower, loginPassword);
-          } catch (e: any) {
-            if (e.code === 'auth/user-not-found' || e.code === 'auth/invalid-credential') {
-              await createUserWithEmailAndPassword(auth, emailLower, loginPassword);
-            } else {
-              console.error('Admin Firebase auth error:', e);
-            }
-          }
-        } catch (err) {
-          console.error('Admin Firebase setup error:', err);
-        }
-      }
-      setIsAuthenticated(true);
-      setCurrentUser({ email: 'admin@timevision.com.br', nome: 'Administrador Local' });
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('tv_admin_auth', 'true');
-        localStorage.setItem('tv_admin_user', JSON.stringify({ email: 'admin@timevision.com.br', nome: 'Administrador Local' }));
-      }
-      loadData();
-      toast({
-        title: 'Acesso Admin Local',
-        description: 'Login efetuado via ambiente de desenvolvimento.',
-      });
-      return;
-    }
-
     const teamMember = equipe.find(m => m.email.toLowerCase() === emailLower);
     if (!teamMember) return;
 
@@ -497,12 +487,14 @@ export default function AdminPage() {
           localStorage.setItem('tv_admin_user', JSON.stringify(userProfile));
         }
         loadData();
+        resetAttempts('login', emailLower);
         toast({
           title: 'Bem-vindo(a)',
           description: `Login de ${teamMember.nome} efetuado com sucesso via Firebase.`,
         });
       } catch (error: any) {
         console.error("Firebase auth error:", error);
+        registerFailedAttempt('login', emailLower);
         toast({
           variant: 'destructive',
           title: 'Erro de Autenticação',
@@ -511,8 +503,9 @@ export default function AdminPage() {
       }
     } else {
       // Local/Offline auth: Read password from equipe document
-      const localPassword = localStorage.getItem(`tv_pwd_${emailLower}`);
-      if (localPassword === loginPassword) {
+      const localPasswordHash = localStorage.getItem(`tv_pwd_${emailLower}`);
+      const inputHash = await hashPasswordLocal(loginPassword);
+      if (localPasswordHash === inputHash) {
         setIsAuthenticated(true);
         const userProfile = { email: emailLower, nome: teamMember.nome };
         setCurrentUser(userProfile);
@@ -521,11 +514,13 @@ export default function AdminPage() {
           localStorage.setItem('tv_admin_user', JSON.stringify(userProfile));
         }
         loadData();
+        resetAttempts('login', emailLower);
         toast({
           title: 'Bem-vindo(a) (Modo Local)',
           description: `Login de ${teamMember.nome} efetuado com sucesso.`,
         });
       } else {
+        registerFailedAttempt('login', emailLower);
         toast({
           variant: 'destructive',
           title: 'Erro de Autenticação',
@@ -567,7 +562,8 @@ export default function AdminPage() {
           }
         }
       } else {
-        localStorage.setItem(`tv_pwd_${emailLower}`, firstAccessPassword);
+        const hashedFirst = await hashPasswordLocal(firstAccessPassword);
+        localStorage.setItem(`tv_pwd_${emailLower}`, hashedFirst);
       }
 
       // Save updated team member profile
@@ -611,6 +607,17 @@ export default function AdminPage() {
   const handlePasswordRecovery = async (e: React.FormEvent) => {
     e.preventDefault();
     const emailLower = recoveryInputEmail.toLowerCase().trim();
+
+    const limit = checkRateLimit('reset', emailLower);
+    if (!limit.allowed) {
+      toast({
+        variant: 'destructive',
+        title: 'Muitas tentativas',
+        description: `Tente solicitar redefinição novamente em ${limit.remaining} minutos.`,
+      });
+      return;
+    }
+
     const teamMember = equipe.find(m => m.email.toLowerCase() === emailLower);
 
     if (!teamMember) {
@@ -660,10 +667,13 @@ export default function AdminPage() {
           console.log(`[DEVS RESET LINK]: ${resData.debugLink}`);
         }
         setIsForgotPassword(false);
+        resetAttempts('reset', emailLower);
       } else {
+        registerFailedAttempt('reset', emailLower);
         throw new Error(resData.error || 'Erro na API.');
       }
     } catch (error: any) {
+      registerFailedAttempt('reset', emailLower);
       toast({
         variant: 'destructive',
         title: 'Erro ao redefinir',
@@ -702,7 +712,7 @@ export default function AdminPage() {
       endereco: formData.get('endereco') as string,
       dataNascimento: formData.get('dataNascimento') as string,
       criadoEm: editingCliente?.criadoEm || new Date().toISOString(),
-      cadastradoPor: (formData.get('cadastradoPor') as string) || editingCliente?.cadastradoPor || currentUser?.email || 'admin@timevision.com.br',
+      cadastradoPor: (formData.get('cadastradoPor') as string) || editingCliente?.cadastradoPor || currentUser?.email || 'sistema',
       eventoId: (formData.get('eventoId') as string) || undefined
     };
 
@@ -737,7 +747,7 @@ export default function AdminPage() {
       quantidade: Number(formData.get('quantidade')),
       precoCusto: Number(formData.get('precoCusto')),
       precoVenda: Number(formData.get('precoVenda')),
-      criadoPor: editingProduto?.criadoPor || currentUser?.email || 'admin@timevision.com.br'
+      criadoPor: editingProduto?.criadoPor || currentUser?.email || 'sistema'
     };
 
     if (!productData.nome || !productData.precoVenda) {
@@ -787,7 +797,7 @@ export default function AdminPage() {
       local: formData.get('local') as string,
       status: editingEvento?.status || 'ativo',
       criadoEm: editingEvento?.criadoEm || new Date().toISOString(),
-      criadoPor: editingEvento?.criadoPor || currentUser?.email || 'admin@timevision.com.br',
+      criadoPor: editingEvento?.criadoPor || currentUser?.email || 'sistema',
       cor: editingEvento?.cor || ['bg-blue-500', 'bg-purple-500', 'bg-rose-500', 'bg-amber-500', 'bg-emerald-500', 'bg-cyan-500', 'bg-fuchsia-500'][Math.floor(Math.random() * 7)]
     };
 
@@ -846,7 +856,7 @@ export default function AdminPage() {
         valor: Number(despesaValor),
         data: despesaData,
         eventoId: despesaEventoId !== '' ? despesaEventoId : undefined,
-        criadoPor: currentUser?.email || 'admin@timevision.com.br'
+        criadoPor: currentUser?.email || 'sistema'
       };
       await saveItem('despesas', updatedDespesa);
       toast({
@@ -862,7 +872,7 @@ export default function AdminPage() {
         valor: Number(despesaValor),
         data: despesaData,
         eventoId: despesaEventoId !== '' ? despesaEventoId : undefined,
-        criadoPor: currentUser?.email || 'admin@timevision.com.br'
+        criadoPor: currentUser?.email || 'sistema'
       };
       await saveItem('despesas', newDespesa);
       toast({
@@ -1627,27 +1637,6 @@ export default function AdminPage() {
                   Voltar
                 </Button>
               )}
-              {process.env.NODE_ENV === 'development' && (
-                <Button 
-                  type="button" 
-                  onClick={() => {
-                    setIsAuthenticated(true);
-                    setCurrentUser({ email: 'admin@timevision.com.br', nome: 'Desenvolvedor' });
-                    if (typeof window !== 'undefined') {
-                      localStorage.setItem('tv_admin_auth', 'true');
-                    }
-                    loadData();
-                    toast({
-                      title: 'Modo de Testes Ativo',
-                      description: 'Entrando sem necessidade de credenciais.',
-                    });
-                  }}
-                  variant="outline" 
-                  className="w-full border-slate-800 text-slate-400 font-bold"
-                >
-                  Pular Autenticação (Modo Desenvolvedor)
-                </Button>
-              )}
             </form>
           </CardContent>
         </Card>
@@ -1741,7 +1730,7 @@ export default function AdminPage() {
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
               <h2 className="text-2xl font-headline font-bold flex items-center gap-2">
                 Visão Geral & Finanças
-                {currentUser?.email === 'admin@timevision.com.br' && (
+                {currentUser?.email === 'sistema' && (
                   <>
                     <button 
                       onClick={async () => {
@@ -1752,7 +1741,7 @@ export default function AdminPage() {
                           const vendasAll = await getItems<Venda>('vendas');
                           let updated = 0;
                           for (const v of vendasAll) {
-                            if (!v.vendedorId || v.vendedorId === 'admin@timevision.com.br') {
+                            if (!v.vendedorId || v.vendedorId === 'sistema') {
                               v.vendedorId = moises.email;
                               v.vendedorNome = moises.nome;
                               await saveItem('vendas', v);
@@ -2321,7 +2310,7 @@ export default function AdminPage() {
                       <div>
                         <span className="font-bold text-slate-450 uppercase text-[9px] block mt-1">Consultor(a) Responsável</span> 
                         <span className="text-amber-500/90 font-medium">
-                          {equipe.find(m => m.email === c.cadastradoPor)?.nome || (c.cadastradoPor === 'admin@timevision.com.br' ? 'Administrador' : c.cadastradoPor || 'ADM')}
+                          {equipe.find(m => m.email === c.cadastradoPor)?.nome || (c.cadastradoPor === 'sistema' ? 'Administrador' : c.cadastradoPor || 'ADM')}
                         </span>
                       </div>
                       
@@ -2922,7 +2911,7 @@ export default function AdminPage() {
                       <label className="text-[10px] font-bold uppercase text-slate-405">Cadastrado por (Consultor)</label>
                       <select
                         name="cadastradoPor"
-                        defaultValue={editingCliente?.cadastradoPor || currentUser?.email || 'admin@timevision.com.br'}
+                        defaultValue={editingCliente?.cadastradoPor || currentUser?.email || 'sistema'}
                         className="bg-slate-950 border border-slate-800 rounded-lg p-2 text-sm text-white focus:outline-none"
                       >
                         <option value="admin@timevision.com.br">Administrador</option>

@@ -64,8 +64,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ 
       success: true, 
-      message: `Link de redefinição enviado para o e-mail de recuperação associado.`,
-      debugLink: testResetLink // Send back in debug mode for ease of use in bypass
+      message: `Link de redefinição enviado para o e-mail de recuperação associado.`
     });
   } catch (error: any) {
     console.error('Reset password API error:', error);

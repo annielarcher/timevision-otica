@@ -8,7 +8,8 @@ lines = content.split('\n')
 keywords = ['role', 'cargo', 'permissao', 'gerente', 'super', 'admin', 'equipe']
 
 for i, line in enumerate(lines, 1):
+    line_lower = line.lower()
     for kw in keywords:
-        if re.search(r'\b' + kw + r'\b', line, re.IGNORECASE):
+        if kw in line_lower:
             print(f"Line {i} ({kw}): {line.strip()}")
             break
