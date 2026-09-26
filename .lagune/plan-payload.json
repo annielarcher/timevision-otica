@@ -1,0 +1,10 @@
+{
+  "entries": [
+    {"name": "Credencial hardcoded no painel admin", "paths": ["src/app/admin/page.tsx"]},
+    {"name": "Link de reset de senha exposto na resposta da API", "paths": ["src/app/api/auth/reset-password/route.ts"]},
+    {"name": "Página de rastreamento expõe dados de clientes sem autenticação", "paths": ["src/app/rastreamento/page.tsx"]},
+    {"name": "Endpoint de login sem rate limiting ou anti-automação", "paths": ["src/app/admin/page.tsx", "src/app/api/auth/reset-password/route.ts"]},
+    {"name": "Senha do localStorage não é protegida", "paths": ["src/app/admin/page.tsx"]},
+    {"name": "ReDoS em script de busca administrativa", "paths": ["search-admin.py"]}
+  ]
+}
